@@ -80,10 +80,10 @@ const ChefOrderSystem = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F5F0E8] flex items-center justify-center p-4">
         <div className="text-center">
           <img src="/logo.png" alt="Logo" className="w-12 h-12 mx-auto mb-4 animate-pulse" />
-          <div className="text-gray-700">Loading orders...</div>
+          <div className="text-[#3E2723]">Loading orders...</div>
         </div>
       </div>
     );
@@ -107,9 +107,9 @@ const ChefOrderSystem = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-3 sm:p-4 max-w-md mx-auto">
+    <div className="min-h-screen bg-[#F5F0E8] p-3 sm:p-4 max-w-md mx-auto">
       {/* Header */}
-      <div className="bg-red-600 rounded-lg shadow-lg p-3 sm:p-4 mb-3 sm:mb-4">
+      <div className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] rounded-lg shadow-lg p-3 sm:p-4 mb-3 sm:mb-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Image
@@ -121,10 +121,10 @@ const ChefOrderSystem = () => {
             />
             <h1 className="text-lg sm:text-xl font-bold text-white">Chef Dash.</h1>
           </div>
-          <a 
+          <a
             href="/dashbord"
-            target="_blank" 
-            className="px-2 py-1 sm:px-3 sm:py-1 bg-red-700 text-white rounded text-xs sm:text-sm hover:bg-red-800 transition-colors whitespace-nowrap"
+            target="_blank"
+            className="px-2 py-1 sm:px-3 sm:py-1 bg-[#8B6239] text-white rounded text-xs sm:text-sm hover:bg-[#D4A574] transition-colors whitespace-nowrap"
           >
             View Dash
           </a>
@@ -146,28 +146,28 @@ const ChefOrderSystem = () => {
         ) : (
           <div className="space-y-2 sm:space-y-3">
             {orders.map(order => (
-              <div key={order.id} className="p-3 sm:p-4 rounded-lg border-l-4 border-orange-600 bg-orange-100 shadow-md transition-shadow hover:shadow-lg">
+              <div key={order.id} className="p-3 sm:p-4 rounded-lg border-l-4 border-[#E67E22] bg-[#FFF8F0] shadow-md transition-shadow hover:shadow-lg">
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-orange-800" />
-                    <span className="font-bold text-base sm:text-lg text-orange-900">#{order.order_number}</span>
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-[#3E2723]" />
+                    <span className="font-bold text-base sm:text-lg text-[#3E2723]">#{order.order_number}</span>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-sm sm:text-base text-orange-900">₹{order.total}</div>
+                    <div className="font-bold text-sm sm:text-base text-[#E67E22]">₹{order.total}</div>
                   </div>
                 </div>
-                
+
                 <div className="mb-2 sm:mb-3">
                   {order.items.map(item => (
-                    <div key={item.id} className="flex justify-between items-center text-xs sm:text-sm text-orange-800 py-1">
+                    <div key={item.id} className="flex justify-between items-center text-xs sm:text-sm text-[#3E2723] py-1">
                       <span className="truncate">{item.quantity}x {item.name}</span>
                     </div>
                   ))}
                 </div>
-                
+
                 <button
                   onClick={() => markAsPrepared(order.id)}
-                  className="w-full py-2 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition-colors text-sm sm:text-base touch-manipulation"
+                  className="w-full py-2 sm:py-2 bg-[#E67E22] hover:bg-[#F39C12] text-white rounded font-medium transition-colors text-sm sm:text-base touch-manipulation"
                   style={{ minHeight: '44px' }} // Minimum touch target size for mobile
                 >
                   ✅ Mark as Prepared

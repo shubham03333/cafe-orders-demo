@@ -436,7 +436,7 @@ const AdminControlPanel = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-red-800 shadow-lg">
+      <div className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] shadow-lg">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -479,13 +479,13 @@ const AdminControlPanel = () => {
 
               <a
                 href="/"
-                className="bg-white text-red-600 px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-gray-100 transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation min-h-[44px] flex items-center justify-center"
+                className="bg-white text-[#6B4423] px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-[#FFF8F0] transition-colors text-sm sm:text-base whitespace-nowrap touch-manipulation min-h-[44px] flex items-center justify-center"
               >
                 Back to Orders
               </a>
               <button
                 onClick={handleLogout}
-                className="bg-red-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1 sm:gap-2 text-sm sm:text-base whitespace-nowrap touch-manipulation min-h-[44px]"
+                className="bg-[#6B4423] text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-[#8B6239] transition-colors flex items-center gap-1 sm:gap-2 text-sm sm:text-base whitespace-nowrap touch-manipulation min-h-[44px]"
               >
                 <LogOut className="w-4 h-4 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Logout</span>
@@ -536,7 +536,7 @@ const AdminControlPanel = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-3 flex items-center gap-2 transition-colors whitespace-nowrap touch-manipulation min-h-[48px] ${
                       activeTab === tab.id
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-[#6B4423] text-white'
                         : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
@@ -690,7 +690,7 @@ const AdminControlPanel = () => {
               <div className="flex gap-3">
                 <button
                   onClick={saveMenuItem}
-                  className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 touch-manipulation min-h-[48px]"
+                  className="px-6 py-3 bg-[#6B4423] text-white rounded-lg hover:bg-[#8B6239] transition-colors flex items-center gap-2 touch-manipulation min-h-[48px]"
                 >
                   <Save className="w-4 h-4" />
                   {editingItem ? 'Update Item' : 'Add Item'}
@@ -743,7 +743,7 @@ const AdminControlPanel = () => {
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 cursor-move hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center gap-4 flex-1">
-                    <div className="w-8 h-8 bg-red-100 rounded flex items-center justify-center text-red-600 font-semibold">
+                    <div className="w-8 h-8 bg-[#6B4423]/10 rounded flex items-center justify-center text-[#6B4423] font-semibold">
                         {item.position || '?'}
                       </div>
 
@@ -778,7 +778,7 @@ const AdminControlPanel = () => {
 
                       <button
                         onClick={() => setEditingItem(item)}
-                        className="p-3 sm:p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                        className="p-3 sm:p-2 bg-[#6B4423]/10 text-[#6B4423] rounded hover:bg-[#6B4423]/20 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
                         title="Edit"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -786,7 +786,7 @@ const AdminControlPanel = () => {
 
                       <button
                         onClick={() => deleteMenuItem(item.id)}
-                        className="p-3 sm:p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                        className="p-3 sm:p-2 bg-[#6B4423]/10 text-[#6B4423] rounded hover:bg-[#6B4423]/20 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
                         title="Delete"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -894,7 +894,7 @@ const AdminControlPanel = () => {
               <div className="flex gap-3">
                 <button
                   onClick={addTable}
-                  className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 touch-manipulation min-h-[48px]"
+                  className="px-6 py-3 bg-[#6B4423] text-white rounded-lg hover:bg-[#8B6239] transition-colors flex items-center gap-2 touch-manipulation min-h-[48px]"
                 >
                   <Plus className="w-4 h-4" />
                   Add Table
@@ -956,7 +956,7 @@ const AdminControlPanel = () => {
 
                       <button
                         onClick={() => deleteTable(table.id)}
-                        className="p-3 sm:p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                        className="p-3 sm:p-2 bg-[#6B4423]/10 text-[#6B4423] rounded hover:bg-[#6B4423]/20 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
                         title="Delete Table"
                       >
                         <Trash2 className="w-4 h-4" />

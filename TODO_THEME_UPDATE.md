@@ -15,20 +15,23 @@
 ## 🔄 IN PROGRESS TASKS
 
 ### 3. Login Page Updates
-- [ ] Update login page background and button colors
-- [ ] Change from red gradients to warm café colors
+- [x] Update login page background and button colors
+- [x] Change from red gradients to warm café colors
+- [x] Updated logo container gradient
+- [x] Updated input field focus colors
+- [x] Updated login button gradient and focus ring
 
 ### 4. Admin Dashboard
 - [ ] Update admin interface colors
 - [ ] Change buttons and UI elements to warm theme
 
 ### 5. Chef Order System
-- [ ] Update chef interface colors
-- [ ] Change status indicators and buttons
+- [x] Update chef interface colors
+- [x] Change status indicators and buttons
 
 ### 6. Global CSS Variables
-- [ ] Add custom CSS variables for warm café colors
-- [ ] Update globals.css with theme variables
+- [x] Add custom CSS variables for warm café colors
+- [x] Update globals.css with theme variables
 
 ### 7. Additional Components
 - [ ] Update PendingOrdersSidebar
