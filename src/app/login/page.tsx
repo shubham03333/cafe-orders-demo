@@ -62,11 +62,11 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-red-600 to-red-800 rounded-full flex items-center justify-center">
+            <div className="w-16 h-16 bg-gradient-to-r from-[#6B4423] to-[#8B6239] rounded-full flex items-center justify-center">
               <img src="/logo.png" alt="Logo" className="w-18 h-17" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Cafe Adda</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Bill Easy</h1>
           <p className="text-gray-600">Sign in to access the system</p>
         </div>
 

@@ -19,7 +19,7 @@ export async function sendWhatsAppOTP(toMobile: string, otpCode: string): Promis
   }
 
   try {
-    const message = `Your OTP code for Cafe Adda is: ${otpCode}. It is valid for 10 minutes.`;
+    const message = `Your OTP code for Bill Easy is: ${otpCode}. It is valid for 10 minutes.`;
 
     await client.messages.create({
       from: whatsappFrom,

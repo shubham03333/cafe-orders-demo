@@ -114,7 +114,7 @@ const ChefOrderSystem = () => {
           <div className="flex items-center gap-2">
             <Image
               src="/logo.png"
-              alt="Cafe Adda Logo"
+              alt="Bill Easy Logo"
               width={55}
               height={55}
               className="rounded-lg"

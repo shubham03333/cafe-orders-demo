@@ -443,9 +443,9 @@ const AdminControlPanel = () => {
               <div className="flex-shrink-0">
                 <Image
                   src="/logo.png"
-                  alt="Cafe Adda Logo"
-                  width={45}
-                  height={45}
+                  alt="Bill Easy Logo"
+                  width={50}
+                  height={50}
                   className="rounded-lg sm:w-[55px] sm:h-[55px]"
                 />
               </div>

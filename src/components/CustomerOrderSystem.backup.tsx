@@ -148,7 +148,7 @@ const CustomerOrderSystem = () => {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <img src="/adda.png" alt="Logo" className="w-12 h-12 mx-auto mb-4 animate-pulse" />
+          <img src="/logo.png" alt="Logo" className="w-12 h-12 mx-auto mb-4 animate-pulse" />
           <div className="text-gray-700">Loading menu...</div>
         </div>
       </div>

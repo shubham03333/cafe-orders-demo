@@ -907,13 +907,13 @@ const CafeOrderSystem = () => {
 
   return (
     <div
-      className="min-h-screen bg-gray-100 p-0.5 sm:p-1 md:p-2 lg:p-4 xl:p-6 w-full max-w-full mx-auto transition-all duration-300 overflow-x-hidden"
+      className="min-h-screen bg-[#F5F0E8] p-0.5 sm:p-1 md:p-2 lg:p-4 xl:p-6 w-full max-w-full mx-auto transition-all duration-300 overflow-x-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-red-800 rounded-lg shadow-lg p-2 sm:p-3 md:p-4 mb-2 sm:mb-3 md:mb-4 transition-all duration-300">
+      <div className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] rounded-lg shadow-lg p-2 sm:p-3 md:p-4 mb-2 sm:mb-3 md:mb-4 transition-all duration-300">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 md:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <img src="/logo.png" alt="Logo" className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20" />
@@ -997,7 +997,7 @@ const CafeOrderSystem = () => {
                 placeholder="Search menu items..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm text-black"
+                className="w-full pl-10 pr-4 py-2 border border-[#E8DFD4] rounded-lg focus:ring-2 focus:ring-[#D4A574] focus:border-transparent text-sm text-[#3E2723]"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1009,8 +1009,8 @@ const CafeOrderSystem = () => {
         onClick={() => setViewMode(viewMode === 'favorites' ? 'all' : 'favorites')}
         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
           viewMode === 'favorites'
-            ? 'bg-red-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ? 'bg-[#6B4423] text-white'
+            : 'bg-[#F9F4EE] text-[#3E2723] hover:bg-[#D4A574] hover:text-white'
         }`}
         title={viewMode === 'favorites' ? 'Show All Items' : 'Show Favorites'}
       >
@@ -1028,8 +1028,8 @@ const CafeOrderSystem = () => {
                   onClick={() => setSelectedCategory(category === 'All' ? null : category)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                     (selectedCategory === category || (category === 'All' && selectedCategory === null))
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-[#6B4423] text-white'
+                      : 'bg-[#F9F4EE] text-[#3E2723] hover:bg-[#D4A574] hover:text-white'
                   }`}
                 >
                   {category}
@@ -1050,7 +1050,7 @@ const CafeOrderSystem = () => {
             {/* Header */}
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-red-600 to-red-800 bg-clip-text text-transparent">
+                <h2 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-[#6B4423] to-[#8B6239] bg-clip-text text-transparent">
                   Edit Order #{editingOrder.order_number.toString().padStart(3, '0')}
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">Modify items and quantities</p>
@@ -1092,7 +1092,7 @@ const CafeOrderSystem = () => {
                         <span className="w-8 text-center font-bold text-gray-900 text-sm">{item.quantity}</span>
                         <button
                           onClick={() => updateEditingOrderItem(item.id, item.quantity + 1)}
-                          className="w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center hover:bg-red-200 transition-colors duration-200 font-semibold text-lg"
+                          className="w-8 h-8 bg-[#D4A574]/20 text-[#D4A574] rounded-full flex items-center justify-center hover:bg-[#D4A574]/30 transition-colors duration-200 font-semibold text-lg"
                           title="Increase quantity"
                         >
                           +
@@ -1125,7 +1125,7 @@ const CafeOrderSystem = () => {
                   placeholder="Search menu items..."
                   value={editOrderSearchTerm}
                   onChange={(e) => setEditOrderSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm text-black"
+                  className="w-full pl-10 pr-4 py-2 border border-[#E8DFD4] rounded-lg focus:ring-2 focus:ring-[#D4A574] focus:border-transparent text-sm text-[#3E2723]"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1141,7 +1141,7 @@ const CafeOrderSystem = () => {
                     <button
                       key={item.id}
                       onClick={() => addItemToEditingOrder(item)}
-                      className="bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white p-3 rounded-lg font-medium text-sm transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
+                      className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] hover:from-[#7D5230] hover:to-[#D4A574] text-white p-3 rounded-lg font-medium text-sm transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg"
                     >
                       <div className="font-semibold text-xs leading-tight">{item.name}</div>
                       <div className="text-xs opacity-90 mt-1">₹{item.price}</div>
@@ -1176,7 +1176,7 @@ const CafeOrderSystem = () => {
                   </button>
                   <button
                     onClick={saveEditedOrder}
-                    className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-red-600 to-red-800 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-900 transition-all duration-200 shadow-md hover:shadow-lg flex items-center gap-1.5 justify-center text-xs sm:text-sm"
+                    className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-[#6B4423] to-[#8B6239] text-white rounded-lg font-medium hover:from-[#7D5230] hover:to-[#D4A574] transition-all duration-200 shadow-md hover:shadow-lg flex items-center gap-1.5 justify-center text-xs sm:text-sm"
                   >
                     <Save className="w-3 h-3 sm:w-4 sm:h-4" />
                     Save Changes
@@ -1232,7 +1232,7 @@ const CafeOrderSystem = () => {
                     <span className="w-6 sm:w-8 text-center font-bold text-gray-900 text-xs sm:text-sm">{item.quantity}</span>
                     <button
                       onClick={() => updateBuildingOrderItemQuantity(item.id, item.quantity + 1)}
-                      className="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center hover:bg-red-200 transition-colors duration-200 font-semibold text-sm sm:text-lg"
+                      className="w-6 h-6 sm:w-8 sm:h-8 bg-[#D4A574]/20 text-[#D4A574] rounded-full flex items-center justify-center hover:bg-[#D4A574]/30 transition-colors duration-200 font-semibold text-sm sm:text-lg"
                       title="Increase quantity"
                     >
                       +
@@ -1240,7 +1240,7 @@ const CafeOrderSystem = () => {
                   </div>
                   <button
                     onClick={() => removeItemFromBuildingOrder(item.id)}
-                    className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors duration-200"
+                    className="p-1.5 sm:p-2 text-[#D4A574] hover:text-[#8B6239] hover:bg-[#D4A574]/10 rounded-full transition-colors duration-200"
                     title="Remove item"
                   >
                     <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1295,7 +1295,7 @@ const CafeOrderSystem = () => {
                   disabled={!selectedTable && selectedOrderType !== 'TAKEAWAY'}
                   className={`w-full p-1.5 sm:p-2 rounded-lg text-center font-medium min-h-[60px] sm:min-h-[70px] flex flex-col justify-center transition-all duration-300 shadow-md hover:shadow-lg ${
                     selectedTable || selectedOrderType === 'TAKEAWAY'
-                      ? 'bg-gradient-to-br from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 cursor-pointer hover:scale-105'
+                      ? 'bg-gradient-to-br from-[#6B4423] to-[#8B6239] hover:from-[#7D5230] hover:to-[#D4A574] cursor-pointer hover:scale-105'
                       : 'bg-gray-400 cursor-not-allowed opacity-50'
                   }`}
                 >
@@ -1408,7 +1408,7 @@ const CafeOrderSystem = () => {
               
               <button
                 onClick={generateSalesReport}
-                className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded font-medium transition-colors"
+                className="w-full bg-[#6B4423] hover:bg-[#8B6239] text-white py-2 px-4 rounded font-medium transition-colors"
               >
                 Generate Report
               </button>
@@ -1471,7 +1471,7 @@ const CafeOrderSystem = () => {
           <div id="print-bill-content" className="bg-white rounded-lg max-w-sm w-full max-h-[90vh] overflow-y-auto shadow-2xl border-2 border-gray-300 print:shadow-none print:border-none print:max-w-none print:w-full print:max-h-none print:overflow-visible print:p-0 print:m-0 print:min-h-screen print:flex print:flex-col">
             {/* Logo at Top */}
             <div className="flex justify-center py-2 px-4 border-b-2 border-gray-300 print:border-b print:border-black print:py-1 print:px-2">
-              <img src="/adda.png" alt="Restaurant Logo" className="w-12 h-12 print:w-16 print:h-16" />
+              <img src="/logo.png" alt="Restaurant Logo" className="w-12 h-12 print:w-16 print:h-16" />
             </div>
 
             {/* Bill Content */}
@@ -1513,7 +1513,7 @@ const CafeOrderSystem = () => {
               <div className="border-t-2 border-gray-300 pt-1 mb-2 print:border-black print:pt-0.5 print:mb-1">
                 <div className="flex justify-between items-center">
                   <span className="text-base font-bold text-gray-900 print:text-black print:text-lg">TOTAL</span>
-                  <span className="text-base font-bold text-red-900 print:text-black print:text-lg">₹{viewingOrder.total}</span>
+                  <span className="text-base font-bold text-[#E67E22] print:text-black print:text-lg">₹{viewingOrder.total}</span>
                 </div>
               </div>
 
@@ -1657,7 +1657,7 @@ const CafeOrderSystem = () => {
 
             {loadingServedOrders ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-red-600 mx-auto mb-3 sm:mb-4"></div>
+                <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-[#6B4423] mx-auto mb-3 sm:mb-4"></div>
                 <div className="text-sm sm:text-base text-gray-600">Loading served orders...</div>
               </div>
             ) : servedOrders.length === 0 ? (
@@ -1717,7 +1717,7 @@ const CafeOrderSystem = () => {
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-semibold text-gray-900">Order #{orderToServe.order_number}</span>
-                  <span className="font-bold text-lg text-red-900">₹{orderToServe.total}</span>
+                  <span className="font-bold text-lg text-[#E67E22]">₹{orderToServe.total}</span>
                 </div>
                 <div className="text-sm text-gray-600">
                   {orderToServe.items.map(item => (
@@ -1847,7 +1847,7 @@ const CafeOrderSystem = () => {
             <div className="mt-4 pt-3 border-t border-gray-200">
               <button
                 onClick={closePaymentRevenueModal}
-                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors text-sm"
+                className="w-full px-4 py-2 bg-[#6B4423] text-white rounded-lg font-medium hover:bg-[#8B6239] transition-colors text-sm"
               >
                 Close
               </button>
@@ -1887,7 +1887,7 @@ const CafeOrderSystem = () => {
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}>
             {/* Sidebar Header */}
-            <div className="bg-gradient-to-r from-red-600 to-red-700 p-4">
+            <div className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] p-4">
               <div className="flex justify-between items-center">
                 <h2 className="text-white font-semibold text-lg">Tables & Orders</h2>
                 <button

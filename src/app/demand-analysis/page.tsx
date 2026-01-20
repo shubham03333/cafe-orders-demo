@@ -173,7 +173,7 @@ const DemandAnalysisPage: React.FC = () => {
                 Dish Demand Analysis
               </h1>
               <img 
-                src="/adda.png" 
+                src="/logo.png" 
                 alt="Cafe Logo" 
                 className="w-20 h-20 object-contain"
               />

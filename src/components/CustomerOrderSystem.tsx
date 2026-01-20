@@ -225,7 +225,7 @@ const CustomerOrderSystem = () => {
       return '/water_bottle.png';
     }
     // Return default image if no match found
-    return '/adda.png'; // fallback image
+    return '/logo.png'; // fallback image
   };
   useEffect(() => {
     let filtered = menuItems;
@@ -604,7 +604,7 @@ const CustomerOrderSystem = () => {
         ],
         merchantInfo: {
           merchantId: '12345678901234567890',
-          merchantName: 'Cafe Adda'
+          merchantName: 'Bill Easy'
         },
         transactionInfo: {
           totalPriceStatus: 'FINAL',
@@ -667,7 +667,7 @@ const CustomerOrderSystem = () => {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <img src="/adda.png" alt="Logo" className="w-12 h-12 mx-auto mb-4 animate-pulse" />
+          <img src="/logo.png" alt="Logo" className="w-12 h-12 mx-auto mb-4 animate-pulse" />
           <div className="text-gray-700">Loading menu...</div>
         </div>
       </div>
@@ -700,7 +700,7 @@ const CustomerOrderSystem = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-2 sm:p-4 max-w-md mx-auto">
       {/* Modern Header */}
-      <div className="bg-gradient-to-r from-red-500 via-red-600 to-red-700 rounded-2xl shadow-xl p-4 mb-4 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#6B4423] via-[#8B6239] to-[#D4A574] rounded-2xl shadow-xl p-4 mb-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="relative z-10">
       <div className="flex justify-between items-start mb-2">
@@ -951,7 +951,7 @@ const CustomerOrderSystem = () => {
             <button
               key={item.id}
               onClick={() => addToOrder(item, 1)}
-      className="w-full p-3 rounded-xl text-center font-medium min-h-[180px] flex flex-col justify-center transition-all duration-300 shadow-lg hover:shadow-xl cursor-pointer hover:scale-105 active:scale-95 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800"
+      className="w-full p-3 rounded-xl text-center font-medium min-h-[180px] flex flex-col justify-center transition-all duration-300 shadow-lg hover:shadow-xl cursor-pointer hover:scale-105 active:scale-95 bg-gradient-to-br from-[#6B4423] to-[#8B6239] hover:from-[#7D5230] hover:to-[#D4A574] active:from-[#D4A574] active:to-[#E67E22]"
             >
               <div className="flex flex-col items-center gap-2">
                 <div className="relative">
@@ -1311,7 +1311,7 @@ const CustomerOrderSystem = () => {
                     <button
                       key={item.id}
                       onClick={() => addItemToEditingOrder(item, 1)}
-                      className="bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white p-2 rounded-md font-medium text-xs transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg flex flex-col items-center justify-center min-h-[60px]"
+                      className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] hover:from-[#7D5230] hover:to-[#D4A574] text-white p-2 rounded-md font-medium text-xs transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg flex flex-col items-center justify-center min-h-[60px]"
                     >
                       <div className="font-semibold text-xs leading-tight text-center mb-1">{item.name}</div>
                       <div className="text-xs opacity-90 bg-white/20 rounded px-1.5 py-0.5">₹{item.price}</div>

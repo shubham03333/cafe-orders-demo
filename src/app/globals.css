@@ -2,8 +2,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #F5F0E8;
+  --foreground: #3E2723;
+
+  /* Warm Café Theme Colors */
+  --primary-brown: #6B4423;
+  --accent-cream: #D4A574;
+  --success-orange: #E67E22;
+  --background-beige: #F5F0E8;
+  --text-dark: #3E2723;
+  --card-white: #FFFFFF;
+  --card-hover: #FFF8F0;
+  --border-light: #E8DFD4;
+  --light-brown: #8B6239;
+  --soft-cream: #F9F4EE;
+  --warm-shadow: rgba(107, 68, 35, 0.12);
 }
 
 @theme inline {
