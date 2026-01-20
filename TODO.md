@@ -1,0 +1,3 @@
+- [x] Replace JSON_TABLE query with order fetching query
+- [x] Add JavaScript processing to aggregate top items from orders data
+- [x] Test the sales report API to ensure it works
