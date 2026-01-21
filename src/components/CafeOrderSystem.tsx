@@ -290,29 +290,59 @@ const CafeOrderSystem = () => {
   const fetchOrders = async () => {
     const scrollPosition = ordersContainerRef.current?.scrollTop || 0; // Store current scroll position
     try {
-    const response = await fetch('/api/orders'); // Remove ?includeServed=true to only get non-served orders
-    if (!response.ok) throw new Error('Failed to fetch orders');
-    const data = await response.json();
-    // Handle paginated response structure
-    const ordersArray = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : []; // Ensure it's always an array
-    setOrders(ordersArray);
+      const response = await fetch('/api/orders'); // Remove ?includeServed=true to only get non-served orders
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const data = await response.json();
+      // Handle paginated response structure
+      const ordersArray = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : []; // Ensure it's always an array
+      setOrders(ordersArray);
 
-    // Calculate pending orders count (orders that are not served)
-    const pendingOrders = ordersArray.filter((order: Order) => order.status !== 'served');
-    setPendingOrdersCount(pendingOrders.length);
+      // Calculate pending orders count (orders that are not served)
+      const pendingOrders = ordersArray.filter((order: Order) => order.status !== 'served');
+      setPendingOrdersCount(pendingOrders.length);
 
-    // Fetch daily sales from API instead of calculating locally
-    await fetchDailySales();
+      // Fetch daily sales from API instead of calculating locally
+      await fetchDailySales();
 
-    setLoading(false);
-
-    if (ordersContainerRef.current) {
-        ordersContainerRef.current.scrollTop = scrollPosition; // Restore scroll position
-    }
-    } catch (err) {
-      setError('Failed to load orders');
       setLoading(false);
-      console.error(err);
+      setError(null); // Clear any previous errors
+
+      if (ordersContainerRef.current) {
+        ordersContainerRef.current.scrollTop = scrollPosition; // Restore scroll position
+      }
+    } catch (err) {
+      console.error('Failed to fetch orders from API:', err);
+
+      // Try to load local orders when offline
+      try {
+        const localOrders = await indexedDBManager.getAllLocalOrders();
+        // Convert local orders to display format (filter out synced ones that should come from server)
+        const displayOrders = localOrders
+          .filter(localOrder => localOrder.sync_status === 'pending' || localOrder.sync_status === 'syncing')
+          .map(localOrder => ({
+            id: localOrder.local_order_id,
+            order_number: (localOrder.order_number || 0).toString(),
+            items: localOrder.items,
+            total: localOrder.total,
+            status: localOrder.status,
+            payment_status: localOrder.payment_status,
+            order_time: localOrder.order_time,
+            order_type: localOrder.order_type,
+            table_code: localOrder.table_code,
+            created_at: localOrder.created_at,
+            updated_at: localOrder.updated_at
+          }));
+
+        setOrders(displayOrders);
+        setPendingOrdersCount(displayOrders.filter(order => order.status !== 'served').length);
+        setError(null); // Clear error since we loaded local data
+        console.log('Loaded orders from local storage');
+      } catch (localErr) {
+        console.error('Failed to load local orders:', localErr);
+        setError('Failed to load orders and no cached data available');
+      }
+
+      setLoading(false);
     }
   };
 
