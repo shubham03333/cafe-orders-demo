@@ -316,22 +316,20 @@ const CafeOrderSystem = () => {
       // Try to load local orders when offline
       try {
         const localOrders = await indexedDBManager.getAllLocalOrders();
-        // Convert local orders to display format (filter out synced ones that should come from server)
-        const displayOrders = localOrders
-          .filter(localOrder => localOrder.sync_status === 'pending' || localOrder.sync_status === 'syncing')
-          .map(localOrder => ({
-            id: localOrder.local_order_id,
-            order_number: (localOrder.order_number || 0).toString(),
-            items: localOrder.items,
-            total: localOrder.total,
-            status: localOrder.status,
-            payment_status: localOrder.payment_status,
-            order_time: localOrder.order_time,
-            order_type: localOrder.order_type,
-            table_code: localOrder.table_code,
-            created_at: localOrder.created_at,
-            updated_at: localOrder.updated_at
-          }));
+        // Convert local orders to display format (include all local orders, not just pending)
+        const displayOrders = localOrders.map(localOrder => ({
+          id: localOrder.local_order_id,
+          order_number: (localOrder.order_number || 0).toString(),
+          items: localOrder.items,
+          total: localOrder.total,
+          status: localOrder.status,
+          payment_status: localOrder.payment_status,
+          order_time: localOrder.order_time,
+          order_type: localOrder.order_type,
+          table_code: localOrder.table_code,
+          created_at: localOrder.created_at,
+          updated_at: localOrder.updated_at
+        }));
 
         setOrders(displayOrders);
         setPendingOrdersCount(displayOrders.filter(order => order.status !== 'served').length);
@@ -652,8 +650,69 @@ const CafeOrderSystem = () => {
       const data = await response.json();
       setSalesReport(data);
     } catch (err) {
-      setError('Failed to generate sales report');
-      console.error(err);
+      console.error('Failed to generate sales report from API:', err);
+
+      // Try to generate report from local data when offline
+      try {
+        const localOrders = await indexedDBManager.getAllLocalOrders();
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // Include the entire end date
+
+        // Filter orders by date range
+        const filteredOrders = localOrders.filter(order => {
+          const orderDate = new Date(order.created_at);
+          return orderDate >= start && orderDate <= end;
+        });
+
+        // Calculate totals
+        const totalRevenue = filteredOrders.reduce((sum, order) => sum + order.total, 0);
+        const totalOrders = filteredOrders.length;
+
+        // Calculate daily breakdown
+        const dailySales = [];
+        const dailyMap = new Map();
+
+        filteredOrders.forEach(order => {
+          const date = new Date(order.created_at).toISOString().split('T')[0];
+          if (!dailyMap.has(date)) {
+            dailyMap.set(date, { date, revenue: 0, orders: 0 });
+          }
+          const day = dailyMap.get(date);
+          day.revenue += order.total;
+          day.orders += 1;
+        });
+
+        dailySales.push(...dailyMap.values());
+
+        // Calculate top items
+        const itemMap = new Map();
+        filteredOrders.forEach(order => {
+          order.items.forEach(item => {
+            if (!itemMap.has(item.id)) {
+              itemMap.set(item.id, { id: item.id, name: item.name, quantity: 0 });
+            }
+            itemMap.get(item.id).quantity += item.quantity;
+          });
+        });
+
+        const topItems = Array.from(itemMap.values())
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5);
+
+        const localReport = {
+          total_revenue: totalRevenue,
+          total_orders: totalOrders,
+          daily_sales: dailySales,
+          top_items: topItems
+        };
+
+        setSalesReport(localReport);
+        console.log('Generated sales report from local data');
+      } catch (localErr) {
+        console.error('Failed to generate sales report from local data:', localErr);
+        setError('Failed to generate sales report and no cached data available');
+      }
     }
   };
 
@@ -713,8 +772,36 @@ const CafeOrderSystem = () => {
       const served = ordersArray.filter((order: Order) => order.status === 'served');
       setServedOrders(served.slice(0, 5)); // Get first 5 (most recent) served orders
     } catch (err) {
-      setError('Failed to fetch served orders');
-      console.error(err);
+      console.error('Failed to fetch served orders from API:', err);
+
+      // Try to load served orders from local storage when offline
+      try {
+        const localOrders = await indexedDBManager.getAllLocalOrders();
+        // Convert local orders to display format and filter served orders
+        const servedOrders = localOrders
+          .filter(localOrder => localOrder.status === 'served')
+          .map(localOrder => ({
+            id: localOrder.local_order_id,
+            order_number: (localOrder.order_number || 0).toString(),
+            items: localOrder.items,
+            total: localOrder.total,
+            status: localOrder.status,
+            payment_status: localOrder.payment_status,
+            order_time: localOrder.order_time,
+            order_type: localOrder.order_type,
+            table_code: localOrder.table_code,
+            created_at: localOrder.created_at,
+            updated_at: localOrder.updated_at
+          }))
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by most recent
+          .slice(0, 5); // Get first 5 (most recent) served orders
+
+        setServedOrders(servedOrders);
+        console.log('Loaded served orders from local storage');
+      } catch (localErr) {
+        console.error('Failed to load served orders from local storage:', localErr);
+        setServedOrders([]);
+      }
     } finally {
       setLoadingServedOrders(false);
     }
@@ -987,7 +1074,13 @@ const CafeOrderSystem = () => {
       <div className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] rounded-lg shadow-lg p-2 sm:p-3 md:p-4 mb-2 sm:mb-3 md:mb-4 transition-all duration-300">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 md:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
-            <img src="/logo.png" alt="Logo" className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20" />
+            {isOffline ? (
+              <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 bg-[#6B4423] rounded-lg flex items-center justify-center text-white font-bold text-sm sm:text-base md:text-lg lg:text-xl">
+                🍽️
+              </div>
+            ) : (
+              <img src="/logo.png" alt="Logo" className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20" />
+            )}
           </div>
           <div className="flex items-center gap-0.5 flex-wrap justify-center max-w-full overflow-x-auto px-1">
             {/* Offline Status Indicator */}
