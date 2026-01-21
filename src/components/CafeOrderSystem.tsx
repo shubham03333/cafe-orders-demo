@@ -958,6 +958,8 @@ const CafeOrderSystem = () => {
         <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 md:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <img src="/logo.png" alt="Logo" className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20" />
+          </div>
+          <div className="flex items-center gap-0.5 flex-wrap justify-center max-w-full overflow-x-auto px-1">
             {/* Offline Status Indicator */}
             <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
               isOffline
@@ -967,8 +969,6 @@ const CafeOrderSystem = () => {
               {isOffline ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
               <span className="hidden sm:inline">{isOffline ? 'Offline' : 'Online'}</span>
             </div>
-          </div>
-          <div className="flex items-center gap-0.5 flex-wrap justify-center max-w-full overflow-x-auto px-1">
             {/* Sidebar Toggle */}
             <button
               onClick={() => setSidebarOpen(true)}
