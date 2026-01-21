@@ -124,7 +124,7 @@ export interface LocalTable {
 
 export interface SyncQueueItem {
   id: string;
-  type: 'order_create' | 'order_update' | 'order_delete';
+  type: 'order_create' | 'order_update' | 'order_delete' | 'payment';
   local_order_id: string;
   data: any;
   created_at: string;

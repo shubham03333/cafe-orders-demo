@@ -52,6 +52,11 @@ class IndexedDBManager {
           tableDataStore.createIndex('last_updated', 'last_updated', { unique: false });
         }
 
+        if (!db.objectStoreNames.contains('salesData')) {
+          const salesDataStore = db.createObjectStore('salesData', { keyPath: 'id' });
+          salesDataStore.createIndex('last_updated', 'last_updated', { unique: false });
+        }
+
         console.log('IndexedDB schema created');
       };
     });
@@ -318,11 +323,47 @@ class IndexedDBManager {
     });
   }
 
+  // Sales Data CRUD
+  async saveSalesData(salesData: any): Promise<void> {
+    if (!this.db) await this.init();
+
+    const salesDataWithMeta = {
+      id: 'sales',
+      data: salesData,
+      last_updated: new Date().toISOString()
+    };
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['salesData'], 'readwrite');
+      const store = transaction.objectStore('salesData');
+      const request = store.put(salesDataWithMeta);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getSalesData(): Promise<any | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['salesData'], 'readonly');
+      const store = transaction.objectStore('salesData');
+      const request = store.get('sales');
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? result.data : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Utility methods
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();
 
-    const stores = ['localOrders', 'syncQueue', 'localTables', 'menuData', 'tableData'];
+    const stores = ['localOrders', 'syncQueue', 'localTables', 'menuData', 'tableData', 'salesData'];
     const promises = stores.map(storeName => {
       return new Promise<void>((resolve, reject) => {
         const transaction = this.db!.transaction([storeName], 'readwrite');

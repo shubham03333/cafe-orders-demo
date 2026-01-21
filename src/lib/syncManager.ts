@@ -91,6 +91,14 @@ class SyncManager {
         });
         break;
 
+      case 'payment':
+        response = await fetch(`/api/orders/${item.data.order_id}/pay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentMode: item.data.payment_mode })
+        });
+        break;
+
       default:
         throw new Error(`Unknown sync type: ${item.type}`);
     }
@@ -107,6 +115,13 @@ class SyncManager {
       await indexedDBManager.updateLocalOrder(item.local_order_id, {
         server_order_id: result.id,
         order_number: result.order_number,
+        sync_status: 'synced',
+        updated_at: new Date().toISOString()
+      });
+    } else if (item.type === 'payment') {
+      await indexedDBManager.updateLocalOrder(item.local_order_id, {
+        payment_status: item.data.payment_mode,
+        status: 'served',
         sync_status: 'synced',
         updated_at: new Date().toISOString()
       });
@@ -154,6 +169,27 @@ class SyncManager {
       data: {
         server_order_id: serverOrderId,
         updates
+      },
+      created_at: new Date().toISOString(),
+      retry_count: 0
+    };
+
+    await indexedDBManager.addToSyncQueue(syncItem);
+
+    // Start sync if online
+    if (this.isOnline) {
+      setTimeout(() => this.startSync(), 1000);
+    }
+  }
+
+  async addPaymentToSyncQueue(orderId: string, paymentMode: 'cash' | 'online'): Promise<void> {
+    const syncItem: SyncQueueItem = {
+      id: `sync_payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'payment',
+      local_order_id: orderId,
+      data: {
+        order_id: orderId,
+        payment_mode: paymentMode
       },
       created_at: new Date().toISOString(),
       retry_count: 0

@@ -1,4 +1,4 @@
-'use client';
+ 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -230,10 +230,28 @@ const CafeOrderSystem = () => {
       const data = await response.json();
       setSalesData(data);
       setDailySales(data.total_revenue);
+
+      // Cache sales data for offline use
+      await indexedDBManager.saveSalesData(data);
     } catch (err) {
       console.error('Failed to fetch daily sales:', err);
-      setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
-      setDailySales(0); // Reset to 0 on error
+
+      // Try to load from cache when offline
+      try {
+        const cachedSales = await indexedDBManager.getSalesData();
+        if (cachedSales) {
+          setSalesData(cachedSales);
+          setDailySales(cachedSales.total_revenue);
+          console.log('Loaded sales data from cache');
+        } else {
+          setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
+          setDailySales(0);
+        }
+      } catch (cacheErr) {
+        console.error('Failed to load sales from cache:', cacheErr);
+        setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
+        setDailySales(0);
+      }
     }
   };
 
@@ -961,9 +979,35 @@ const CafeOrderSystem = () => {
       closePaymentModeModal();
       closeOrderPopup(); // Close the bill popup and return to main dashboard
     } catch (err) {
-      setError('Failed to process payment and serve order');
-      console.error(err);
-      closePaymentModeModal();
+      console.error('Failed to process payment online:', err);
+
+        // Offline mode: Store payment locally and sync later
+      try {
+        // Update local order with payment status
+        const localOrderId = orderToServe.id.startsWith('local_') ? orderToServe.id : `local_${orderToServe.id}`;
+        await indexedDBManager.updateLocalOrder(localOrderId, {
+          payment_status: 'paid',
+          payment_mode: paymentMode,
+          status: 'served',
+          updated_at: new Date().toISOString()
+        });
+
+        // Add to sync queue for payment processing
+        await syncManagerRef.current?.addPaymentToSyncQueue(orderToServe.id, paymentMode);
+
+        // Update UI state
+        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderToServe.id));
+        setPendingOrdersCount(prev => prev - 1);
+        await fetchDailySales();
+
+        closePaymentModeModal();
+        closeOrderPopup();
+        console.log('Payment processed locally and queued for sync');
+      } catch (localErr) {
+        console.error('Failed to process payment locally:', localErr);
+        setError('Failed to process payment and serve order');
+        closePaymentModeModal();
+      }
     }
   };
 
