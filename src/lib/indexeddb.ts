@@ -1,4 +1,4 @@
-import { LocalOrder, SyncQueueItem, LocalTable } from '@/types';
+import { LocalOrder, SyncQueueItem, LocalTable, MenuItem, Table } from '@/types';
 
 class IndexedDBManager {
   private db: IDBDatabase | null = null;
@@ -40,6 +40,16 @@ class IndexedDBManager {
         if (!db.objectStoreNames.contains('localTables')) {
           const tablesStore = db.createObjectStore('localTables', { keyPath: 'id' });
           tablesStore.createIndex('last_updated', 'last_updated', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('menuData')) {
+          const menuStore = db.createObjectStore('menuData', { keyPath: 'id' });
+          menuStore.createIndex('last_updated', 'last_updated', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('tableData')) {
+          const tableDataStore = db.createObjectStore('tableData', { keyPath: 'id' });
+          tableDataStore.createIndex('last_updated', 'last_updated', { unique: false });
         }
 
         console.log('IndexedDB schema created');
@@ -236,11 +246,83 @@ class IndexedDBManager {
     });
   }
 
+  // Menu Data CRUD
+  async saveMenuData(menuItems: MenuItem[]): Promise<void> {
+    if (!this.db) await this.init();
+
+    const menuData = {
+      id: 'menu',
+      data: menuItems,
+      last_updated: new Date().toISOString()
+    };
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['menuData'], 'readwrite');
+      const store = transaction.objectStore('menuData');
+      const request = store.put(menuData);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getMenuData(): Promise<MenuItem[] | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['menuData'], 'readonly');
+      const store = transaction.objectStore('menuData');
+      const request = store.get('menu');
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? result.data : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  // Table Data CRUD
+  async saveTableData(tables: Table[]): Promise<void> {
+    if (!this.db) await this.init();
+
+    const tableData = {
+      id: 'tables',
+      data: tables,
+      last_updated: new Date().toISOString()
+    };
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['tableData'], 'readwrite');
+      const store = transaction.objectStore('tableData');
+      const request = store.put(tableData);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getTableData(): Promise<Table[] | null> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['tableData'], 'readonly');
+      const store = transaction.objectStore('tableData');
+      const request = store.get('tables');
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result ? result.data : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   // Utility methods
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();
 
-    const stores = ['localOrders', 'syncQueue', 'localTables'];
+    const stores = ['localOrders', 'syncQueue', 'localTables', 'menuData', 'tableData'];
     const promises = stores.map(storeName => {
       return new Promise<void>((resolve, reject) => {
         const transaction = this.db!.transaction([storeName], 'readwrite');

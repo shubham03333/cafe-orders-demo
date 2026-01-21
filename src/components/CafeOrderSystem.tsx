@@ -191,13 +191,35 @@ const CafeOrderSystem = () => {
 
   const fetchMenu = async () => {
     try {
+      // Try to fetch from API first
       const response = await fetch('/api/menu?availableOnly=true');
       if (!response.ok) throw new Error('Failed to fetch menu');
       const data = await response.json();
       setMenuItems(data);
+
+      // Cache the menu data for offline use
+      await indexedDBManager.saveMenuData(data);
     } catch (err) {
-      setError('Failed to load menu');
-      console.error(err);
+      console.error('Failed to fetch menu from API:', err);
+
+      // Try to load from cache if offline
+      if (!isOffline) {
+        setError('Failed to load menu');
+        return;
+      }
+
+      try {
+        const cachedMenu = await indexedDBManager.getMenuData();
+        if (cachedMenu) {
+          setMenuItems(cachedMenu);
+          console.log('Loaded menu from cache');
+        } else {
+          setError('Failed to load menu and no cached data available');
+        }
+      } catch (cacheErr) {
+        console.error('Failed to load menu from cache:', cacheErr);
+        setError('Failed to load menu');
+      }
     }
   };
 
@@ -235,12 +257,31 @@ const CafeOrderSystem = () => {
 
   const fetchTables = async () => {
     try {
+      // Try to fetch from API first
       const response = await fetch('/api/tables');
       if (!response.ok) throw new Error('Failed to fetch tables');
       const data = await response.json();
       setTables(data);
+
+      // Cache the table data for offline use
+      await indexedDBManager.saveTableData(data);
     } catch (err) {
-      console.error('Failed to fetch tables:', err);
+      console.error('Failed to fetch tables from API:', err);
+
+      // Try to load from cache if offline
+      if (!isOffline) {
+        return;
+      }
+
+      try {
+        const cachedTables = await indexedDBManager.getTableData();
+        if (cachedTables) {
+          setTables(cachedTables);
+          console.log('Loaded tables from cache');
+        }
+      } catch (cacheErr) {
+        console.error('Failed to load tables from cache:', cacheErr);
+      }
     }
   };
 
@@ -917,6 +958,15 @@ const CafeOrderSystem = () => {
         <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 md:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <img src="/logo.png" alt="Logo" className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20" />
+            {/* Offline Status Indicator */}
+            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+              isOffline
+                ? 'bg-red-100 text-red-800 border border-red-200'
+                : 'bg-green-100 text-green-800 border border-green-200'
+            }`}>
+              {isOffline ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
+              <span className="hidden sm:inline">{isOffline ? 'Offline' : 'Online'}</span>
+            </div>
           </div>
           <div className="flex items-center gap-0.5 flex-wrap justify-center max-w-full overflow-x-auto px-1">
             {/* Sidebar Toggle */}

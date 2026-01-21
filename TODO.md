@@ -1,35 +1,57 @@
-# Warm & Inviting Café Theme Update - Implementation Plan
+# Offline Support Implementation Plan
 
-## High Priority (Do First)
-- [ ] Update header gradient background (from red to warm brown)
-- [ ] Update pending/sales cards styling
-- [ ] Update active category tab styling
-- [ ] Update menu item cards
+## Current Status
+- ✅ PWA manifest present
+- ✅ Service worker exists but not registered
+- ✅ IndexedDB implemented with stores for orders, sync queue, and tables
+- ✅ SyncManager class exists for background syncing
+- ✅ Offline status detection hook exists
+- ✅ Some offline order creation logic in CafeOrderSystem
+- ❌ No menu data caching for offline
+- ❌ No service worker registration
+- ❌ No API response caching in service worker
+- ❌ No offline menu/table data loading
+- ❌ No automatic sync on reconnection
 
-## Medium Priority
-- [ ] Update search bar styling
-- [ ] Update inactive tabs
-- [ ] Update icon buttons
-- [ ] Update star/favorite icons
+## Implementation Steps
 
-## Low Priority (Polish)
-- [ ] Update hover states
-- [ ] Refine shadows
-- [ ] Add optional subtle patterns
+### 1. Register Service Worker
+- [x] Add service worker registration to layout.tsx
+- [x] Handle registration errors gracefully
 
-## Files to Edit
-- [ ] src/components/CafeOrderSystem.tsx - Main UI component
-- [ ] src/app/globals.css - Add custom color variables
+### 2. Update Service Worker for API Caching
+- [x] Modify sw.js to cache menu API responses
+- [x] Cache table API responses
+- [x] Cache system settings if any
+- [x] Implement cache-first strategy for static assets
 
-## Color Palette Reference
-PRIMARY_BROWN: #6B4423
-ACCENT_CREAM: #D4A574
-SUCCESS_ORANGE: #E67E22
-BACKGROUND_BEIGE: #F5F0E8
-TEXT_DARK: #3E2723
-CARD_WHITE: #FFFFFF
-CARD_HOVER: #FFF8F0
-BORDER_LIGHT: #E8DFD4
-LIGHT_BROWN: #8B6239
-SOFT_CREAM: #F9F4EE
-WARM_SHADOW: rgba(107, 68, 35, 0.12)
+### 3. Implement Menu Data Caching
+- [x] Add menu store to IndexedDB schema
+- [x] Create functions to save/load menu data
+- [x] Update CafeOrderSystem to cache menu data on fetch
+
+### 4. Implement Table Data Caching
+- [x] Add table caching functions
+- [x] Update CafeOrderSystem to cache table data
+
+### 5. Update CafeOrderSystem for Offline Loading
+- [x] Modify fetchMenu to load from cache when offline
+- [x] Modify fetchTables to load from cache when offline
+- [x] Add offline indicators in UI
+
+### 6. Enhance Sync Manager
+- [x] Ensure SyncManager handles all offline operations
+- [x] Add automatic sync on reconnection
+- [x] Handle sync conflicts gracefully
+
+### 7. Add Offline UI Indicators
+- [x] Show offline/online status in header
+- [x] Indicate when data is from cache
+- [x] Show sync status for pending orders
+
+### 8. Testing
+- [ ] Test offline order creation
+- [ ] Test offline menu/table loading
+- [ ] Test sync on reconnection
+- [ ] Test printing offline
+- [ ] Test no duplicate orders on sync

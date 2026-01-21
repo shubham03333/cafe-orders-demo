@@ -33,6 +33,24 @@ export default function RootLayout({
           {children}
         </CustomerAuthProvider>
         <Script src="https://pay.google.com/gp/p/js/pay.js" strategy="beforeInteractive" />
+        <Script
+          id="service-worker-registration"
+          strategy="afterInteractive"
+        >
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                  .then(function(registration) {
+                    console.log('Service Worker registered successfully:', registration.scope);
+                  })
+                  .catch(function(error) {
+                    console.log('Service Worker registration failed:', error);
+                  });
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );
