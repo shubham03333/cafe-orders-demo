@@ -9,7 +9,7 @@ const getDbConfig = () => {
     password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD,
     database: process.env.DB_NAME || process.env.MYSQL_DATABASE,
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
     waitForConnections: true,
     connectionLimit: 20,
     queueLimit: 0,

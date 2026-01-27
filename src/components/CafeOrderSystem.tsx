@@ -7,11 +7,23 @@ import { Order, MenuItem, OrderItem, CreateOrderRequest, UpdateOrderRequest, Tab
 import { useOfflineStatus } from '@/hooks/useOfflineStatus';
 import { indexedDBManager } from '@/lib/indexeddb';
 import { SyncManager } from '@/lib/syncManager';
+import { PaymentService } from '@/lib/payment-service';
+import { offlineManager } from '@/lib/offline-manager';
 import GoogleReviewQR from './GoogleReviewQR';
 import PendingOrdersSidebar from './PendingOrdersSidebar';
+import { indexedDBManagerV2 } from '@/lib/indexeddb-new';
+
+
 
 
 const CafeOrderSystem = () => {
+  // Helper function to display order number
+  const displayOrderNumber = (order: Order) => {
+    if (!order.order_number) return '#00';
+    const num = parseInt(order.order_number.toString());
+    return isNaN(num) ? '#00' : `#${num.toString().padStart(3, '0')}`;
+  };
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [buildingOrder, setBuildingOrder] = useState<OrderItem[]>([]);
@@ -82,6 +94,7 @@ const CafeOrderSystem = () => {
   // Swipe gesture state
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  
 
   // Minimum swipe distance (in px) to trigger the gesture
   const minSwipeDistance = 50;
@@ -148,12 +161,17 @@ const CafeOrderSystem = () => {
     fetchPopularItems();
 
     // Set up polling for real-time updates with longer intervals to reduce memory usage
+    // OFFLINE-FIRST: Only poll when online and circuit breaker is closed
     const ordersPollingInterval = setInterval(() => {
-      fetchOrders();
+if (!isOffline && !editingOrder && !isPaymentModeModalOpen) {
+  fetchOrders();
+}
     }, 5000); // Poll orders every 5 seconds (increased from 3)
 
     const menuPollingInterval = setInterval(() => {
-      fetchMenu(); // Refresh menu items to reflect availability changes from admin
+      if (!isOffline) {
+        fetchMenu(); // Refresh menu items to reflect availability changes from admin
+      }
     }, 30000); // Poll menu every 30 seconds (reduced frequency)
 
     // Listen for order update events (e.g., payment status changes)
@@ -162,7 +180,31 @@ const CafeOrderSystem = () => {
       fetchOrders();
     };
 
+    // Online/Offline event listeners for syncing
+    const handleOnline = () => {
+      console.log('🔄 Connection restored - syncing pending data...');
+      // Trigger sync when coming back online
+      if (syncManagerRef.current) {
+        syncManagerRef.current.startSync().then(() => {
+          console.log('✅ Sync completed after reconnection');
+          // Refresh data after sync
+          fetchOrders();
+          fetchMenu();
+          fetchTables();
+          fetchDailySales();
+        }).catch((err: any) => {
+          console.error('❌ Sync failed after reconnection:', err);
+        });
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('📴 Connection lost - switching to offline mode');
+    };
+
     window.addEventListener('orderUpdated', handleOrderUpdate);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     // Memory monitoring in development
     let memoryCheckInterval: NodeJS.Timeout | null = null;
@@ -178,7 +220,7 @@ const CafeOrderSystem = () => {
       }, 60000); // Check every minute
     }
 
-    // Clean up intervals and event listener on component unmount
+    // Clean up intervals and event listeners on component unmount
     return () => {
       clearInterval(ordersPollingInterval);
       clearInterval(menuPollingInterval);
@@ -186,12 +228,34 @@ const CafeOrderSystem = () => {
         clearInterval(memoryCheckInterval);
       }
       window.removeEventListener('orderUpdated', handleOrderUpdate);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
   const fetchMenu = async () => {
+    // OFFLINE-FIRST: Check offline status immediately
+    const isCurrentlyOffline = !navigator.onLine;
+
+    if (isCurrentlyOffline) {
+      // OFFLINE PATH: Load from IndexedDB only
+      try {
+        const cachedMenu = await indexedDBManager.getMenuData();
+        if (cachedMenu) {
+          setMenuItems(cachedMenu);
+          console.log('Loaded menu from cache (offline mode)');
+        } else {
+          setError('Failed to load menu and no cached data available');
+        }
+      } catch (cacheErr) {
+        console.error('Failed to load menu from cache:', cacheErr);
+        setError('Failed to load menu');
+      }
+      return;
+    }
+
+    // ONLINE PATH: Fetch from API
     try {
-      // Try to fetch from API first
       const response = await fetch('/api/menu?availableOnly=true');
       if (!response.ok) throw new Error('Failed to fetch menu');
       const data = await response.json();
@@ -202,17 +266,12 @@ const CafeOrderSystem = () => {
     } catch (err) {
       console.error('Failed to fetch menu from API:', err);
 
-      // Try to load from cache if offline
-      if (!isOffline) {
-        setError('Failed to load menu');
-        return;
-      }
-
+      // Fallback to cache if API fails
       try {
         const cachedMenu = await indexedDBManager.getMenuData();
         if (cachedMenu) {
           setMenuItems(cachedMenu);
-          console.log('Loaded menu from cache');
+          console.log('Loaded menu from cache (API fallback)');
         } else {
           setError('Failed to load menu and no cached data available');
         }
@@ -224,6 +283,30 @@ const CafeOrderSystem = () => {
   };
 
   const fetchDailySales = async () => {
+    // OFFLINE-FIRST: Check offline status immediately
+    const isCurrentlyOffline = !navigator.onLine;
+
+    if (isCurrentlyOffline) {
+      // OFFLINE PATH: Load from IndexedDB only
+      try {
+        const cachedSales = await indexedDBManager.getSalesData();
+        if (cachedSales) {
+          setSalesData(cachedSales);
+          setDailySales(cachedSales.total_revenue);
+          console.log('Loaded sales data from cache (offline mode)');
+        } else {
+          setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
+          setDailySales(0);
+        }
+      } catch (cacheErr) {
+        console.error('Failed to load sales from cache:', cacheErr);
+        setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
+        setDailySales(0);
+      }
+      return;
+    }
+
+    // ONLINE PATH: Fetch from API
     try {
       const response = await fetch('/api/daily-sales/today');
       if (!response.ok) throw new Error('Failed to fetch daily sales');
@@ -234,15 +317,15 @@ const CafeOrderSystem = () => {
       // Cache sales data for offline use
       await indexedDBManager.saveSalesData(data);
     } catch (err) {
-      console.error('Failed to fetch daily sales:', err);
+      console.error('Failed to fetch daily sales from API:', err);
 
-      // Try to load from cache when offline
+      // Fallback to cache if API fails
       try {
         const cachedSales = await indexedDBManager.getSalesData();
         if (cachedSales) {
           setSalesData(cachedSales);
           setDailySales(cachedSales.total_revenue);
-          console.log('Loaded sales data from cache');
+          console.log('Loaded sales data from cache (API fallback)');
         } else {
           setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
           setDailySales(0);
@@ -274,8 +357,28 @@ const CafeOrderSystem = () => {
   };
 
   const fetchTables = async () => {
+    // OFFLINE-FIRST: Check offline status immediately
+    const isCurrentlyOffline = !navigator.onLine;
+
+    if (isCurrentlyOffline) {
+      // OFFLINE PATH: Load from IndexedDB only
+      try {
+        const cachedTables = await indexedDBManager.getTableData();
+        if (cachedTables) {
+          setTables(cachedTables);
+          console.log('Loaded tables from cache (offline mode)');
+        } else {
+          setError('Failed to load tables and no cached data available');
+        }
+      } catch (cacheErr) {
+        console.error('Failed to load tables from cache:', cacheErr);
+        setError('Failed to load tables');
+      }
+      return;
+    }
+
+    // ONLINE PATH: Fetch from API
     try {
-      // Try to fetch from API first
       const response = await fetch('/api/tables');
       if (!response.ok) throw new Error('Failed to fetch tables');
       const data = await response.json();
@@ -286,19 +389,18 @@ const CafeOrderSystem = () => {
     } catch (err) {
       console.error('Failed to fetch tables from API:', err);
 
-      // Try to load from cache if offline
-      if (!isOffline) {
-        return;
-      }
-
+      // Fallback to cache if API fails
       try {
         const cachedTables = await indexedDBManager.getTableData();
         if (cachedTables) {
           setTables(cachedTables);
-          console.log('Loaded tables from cache');
+          console.log('Loaded tables from cache (API fallback)');
+        } else {
+          setError('Failed to load tables and no cached data available');
         }
       } catch (cacheErr) {
         console.error('Failed to load tables from cache:', cacheErr);
+        setError('Failed to load tables');
       }
     }
   };
@@ -307,6 +409,49 @@ const CafeOrderSystem = () => {
 
   const fetchOrders = async () => {
     const scrollPosition = ordersContainerRef.current?.scrollTop || 0; // Store current scroll position
+
+    // OFFLINE-FIRST: Check offline status immediately
+    const isCurrentlyOffline = !navigator.onLine;
+
+    if (isCurrentlyOffline) {
+      // OFFLINE PATH: Load from IndexedDB only
+      try {
+        const localOrders = await indexedDBManager.getAllLocalOrders();
+        // Convert local orders to display format and filter out served orders (same as online mode)
+        const displayOrders = localOrders
+          .filter(localOrder => localOrder.status !== 'served')
+          .map(localOrder => ({
+            id: localOrder.local_order_id,
+            order_number: (localOrder.order_number || 0).toString(),
+            items: localOrder.items,
+            total: localOrder.total,
+            status: localOrder.status,
+            payment_status: localOrder.payment_status,
+            order_time: localOrder.order_time,
+            order_type: localOrder.order_type,
+            table_code: localOrder.table_code,
+            created_at: localOrder.created_at,
+            updated_at: localOrder.updated_at
+          }));
+
+        setOrders(displayOrders);
+        setPendingOrdersCount(displayOrders.length);
+        setError(null); // Clear error since we loaded local data
+        console.log('Loaded orders from local storage (offline mode)');
+        setLoading(false);
+
+        if (ordersContainerRef.current) {
+          ordersContainerRef.current.scrollTop = scrollPosition; // Restore scroll position
+        }
+      } catch (localErr) {
+        console.error('Failed to load local orders:', localErr);
+        setError('Failed to load orders and no cached data available');
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ONLINE PATH: Fetch from API
     try {
       const response = await fetch('/api/orders'); // Remove ?includeServed=true to only get non-served orders
       if (!response.ok) throw new Error('Failed to fetch orders');
@@ -331,7 +476,7 @@ const CafeOrderSystem = () => {
     } catch (err) {
       console.error('Failed to fetch orders from API:', err);
 
-      // Try to load local orders when offline
+      // Fallback to local data if API fails
       try {
         const localOrders = await indexedDBManager.getAllLocalOrders();
         // Convert local orders to display format (include all local orders, not just pending)
@@ -352,7 +497,7 @@ const CafeOrderSystem = () => {
         setOrders(displayOrders);
         setPendingOrdersCount(displayOrders.filter(order => order.status !== 'served').length);
         setError(null); // Clear error since we loaded local data
-        console.log('Loaded orders from local storage');
+        console.log('Loaded orders from local storage (API fallback)');
       } catch (localErr) {
         console.error('Failed to load local orders:', localErr);
         setError('Failed to load orders and no cached data available');
@@ -494,6 +639,16 @@ const CafeOrderSystem = () => {
     try {
       const updateData: UpdateOrderRequest = { status, items: orders.find(order => order.id === orderId)?.items };
 
+      if (!navigator.onLine) {
+  await indexedDBManager.updateLocalOrder(orderId, {
+    status,
+    updated_at: new Date().toISOString()
+  });
+  await fetchOrders();
+  return;
+}
+
+
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -524,6 +679,30 @@ const CafeOrderSystem = () => {
   };
 
   const deleteOrder = async (orderId: string) => {
+    // OFFLINE-FIRST: Check offline status immediately
+    const isCurrentlyOffline = !navigator.onLine;
+
+    if (isCurrentlyOffline) {
+      // OFFLINE PATH: Delete from IndexedDB only
+      try {
+        if (orderId.startsWith('local_')) {
+          await indexedDBManager.deleteLocalOrder(orderId);
+          console.log('Order deleted locally (offline mode)');
+        } else {
+          console.warn('Cannot delete non-local order while offline');
+          setError('Cannot delete order while offline - please try again when connected');
+          return;
+        }
+
+        await fetchOrders(); // Refresh orders from local storage
+      } catch (localErr) {
+        console.error('Failed to delete order locally:', localErr);
+        setError('Failed to delete order locally');
+      }
+      return;
+    }
+
+    // ONLINE PATH: Delete via API and also from IndexedDB
     try {
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'DELETE'
@@ -531,8 +710,17 @@ const CafeOrderSystem = () => {
 
       if (!response.ok) throw new Error('Failed to delete order');
 
+      // Also delete from IndexedDB to maintain consistency
+      try {
+        await indexedDBManager.deleteLocalOrder(orderId);
+        console.log('Order deleted from both server and IndexedDB');
+      } catch (localDeleteErr) {
+        console.warn('Failed to delete order from IndexedDB:', localDeleteErr);
+        // Don't fail the whole operation if local delete fails
+      }
+
       await fetchOrders(); // Refresh orders
-      
+
     } catch (err) {
       setError('Failed to delete order');
       console.error(err);
@@ -546,6 +734,48 @@ const CafeOrderSystem = () => {
       return;
     }
 
+    // OFFLINE-FIRST: Check offline status immediately
+    const isCurrentlyOffline = !navigator.onLine;
+
+    if (isCurrentlyOffline) {
+      // OFFLINE PATH: Update local order and queue for sync
+      try {
+        const localOrderId = editingOrder.id.startsWith('local_') ? editingOrder.id : `local_${editingOrder.id}`;
+
+        // Update local order in IndexedDB
+await indexedDBManager.updateLocalOrder(editingOrder.id, {
+  items: editingOrder.items,
+  total: editingOrder.total,
+  updated_at: new Date().toISOString()
+});
+
+
+        // Add update to sync queue if we have a server order ID
+        if (!editingOrder.id.startsWith('local_')) {
+          await syncManagerRef.current?.addOrderUpdateToSyncQueue(
+            localOrderId,
+            editingOrder.id,
+            {
+              items: editingOrder.items,
+              total: editingOrder.total
+            }
+          );
+        }
+
+        // Update the bill view with the latest changes if it's currently open
+        setViewingOrder(editingOrder);
+        setEditingOrder(null);
+        await fetchOrders(); // Refresh orders from local storage
+
+        console.log('Order updated locally and queued for sync');
+      } catch (localErr) {
+        console.error('Failed to update order locally:', localErr);
+        setError('Failed to save order locally');
+      }
+      return;
+    }
+
+    // ONLINE PATH: Update via API
     try {
       const updateData: UpdateOrderRequest = {
         items: editingOrder.items,
@@ -599,6 +829,8 @@ const CafeOrderSystem = () => {
         items: updatedItems,
         total
       };
+
+      
 
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
@@ -836,10 +1068,19 @@ const CafeOrderSystem = () => {
   };
 
   // Payment mode functions
+  // const openPaymentModeModal = (order: Order) => {
+  //   setOrderToServe(order);
+  //   setIsPaymentModeModalOpen(true);
+  // };
+
   const openPaymentModeModal = (order: Order) => {
-    setOrderToServe(order);
-    setIsPaymentModeModalOpen(true);
-  };
+  if (order.status !== 'ready') {
+    setError('Order is not ready for payment');
+    return;
+  }
+  setOrderToServe(order);
+  setIsPaymentModeModalOpen(true);
+};
 
   const closePaymentModeModal = () => {
     setIsPaymentModeModalOpen(false);
@@ -959,57 +1200,48 @@ const CafeOrderSystem = () => {
   printWindow.document.close();
 };
 
+const handlePaymentModeSelection = async (paymentMode: 'cash' | 'online') => {
+  if (!orderToServe) return;
 
-  const handlePaymentModeSelection = async (paymentMode: 'cash' | 'online') => {
-    if (!orderToServe) return;
+  try {
+    // 🔑 STEP 1: Resolve LOCAL order from V1 IndexedDB
+    const localOrders = await indexedDBManager.getAllLocalOrders();
 
-    try {
-      // First update the payment mode
-      const paymentResponse = await fetch(`/api/orders/${orderToServe.id}/pay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMode })
-      });
+    const localOrder = localOrders.find(o =>
+      o.local_order_id === orderToServe.id ||        // offline order
+      o.server_order_id === orderToServe.id          // online order
+    );
 
-      if (!paymentResponse.ok) throw new Error('Failed to process payment');
-
-      // Then mark the order as served
-      await updateOrderStatus(orderToServe.id, 'served');
-
-      closePaymentModeModal();
-      closeOrderPopup(); // Close the bill popup and return to main dashboard
-    } catch (err) {
-      console.error('Failed to process payment online:', err);
-
-        // Offline mode: Store payment locally and sync later
-      try {
-        // Update local order with payment status
-        const localOrderId = orderToServe.id.startsWith('local_') ? orderToServe.id : `local_${orderToServe.id}`;
-        await indexedDBManager.updateLocalOrder(localOrderId, {
-          payment_status: 'paid',
-          payment_mode: paymentMode,
-          status: 'served',
-          updated_at: new Date().toISOString()
-        });
-
-        // Add to sync queue for payment processing
-        await syncManagerRef.current?.addPaymentToSyncQueue(orderToServe.id, paymentMode);
-
-        // Update UI state
-        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderToServe.id));
-        setPendingOrdersCount(prev => prev - 1);
-        await fetchDailySales();
-
-        closePaymentModeModal();
-        closeOrderPopup();
-        console.log('Payment processed locally and queued for sync');
-      } catch (localErr) {
-        console.error('Failed to process payment locally:', localErr);
-        setError('Failed to process payment and serve order');
-        closePaymentModeModal();
-      }
+    if (!localOrder) {
+      throw new Error('Local order not found for payment');
     }
-  };
+
+    // 🔑 STEP 2: Pass LOCAL ORDER ID (V1)
+    await PaymentService.process(localOrder.local_order_id, paymentMode);
+
+    // UI updates
+    setOrders(prev => prev.filter(o => o.id !== orderToServe.id));
+    setPendingOrdersCount(prev => Math.max(prev - 1, 0));
+
+    await fetchDailySales();
+
+    closePaymentModeModal();
+    closeOrderPopup();
+
+  } catch (err) {
+    console.error('❌ Failed to process payment:', err);
+    setError(
+      `Failed to process payment: ${
+        err instanceof Error ? err.message : 'Unknown error'
+      }`
+    );
+  }
+};
+
+
+
+
+
 
   // Menu step
   if (loading) {
@@ -1266,11 +1498,11 @@ const CafeOrderSystem = () => {
 
             {/* Header */}
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-[#6B4423] to-[#8B6239] bg-clip-text text-transparent">
-                  Edit Order #{editingOrder.order_number.toString().padStart(3, '0')}
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">Modify items and quantities</p>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-[#6B4423] to-[#8B6239] bg-clip-text text-transparent">
+                Edit Order #{displayOrderNumber(editingOrder)}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">Modify items and quantities</p>
                 {editingOrder.order_type === 'DINE_IN' && editingOrder.table_code && (
                   <p className="text-sm text-blue-600 font-medium mt-1">Table: {editingOrder.table_code}</p>
                 )}
@@ -1700,7 +1932,7 @@ const CafeOrderSystem = () => {
 
               {/* Order Header */}
               <div className="text-center mb-2 print:mb-1">
-                <div className="text-xs text-gray-600 print:text-black">Order #{viewingOrder.order_number.toString().padStart(3, '0')}</div>
+                <div className="text-xs text-gray-600 print:text-black">Order #{displayOrderNumber(viewingOrder)}</div>
                 <div className="text-xs text-gray-500 print:text-black">{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</div>
                 {viewingOrder.order_type === 'DINE_IN' && viewingOrder.table_code && (
                   <div className="text-xs text-gray-500 print:text-black">Table: {viewingOrder.table_code}</div>
@@ -1889,7 +2121,7 @@ const CafeOrderSystem = () => {
                   <div key={order.id} className="p-3 sm:p-4 bg-green-50 rounded-lg border border-green-200">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-1.5 sm:gap-2">
-                        <span className="font-bold text-green-900 text-sm sm:text-base">#{order.order_number.toString().padStart(3, '0')}</span>
+                        <span className="font-bold text-green-900 text-sm sm:text-base">#{displayOrderNumber(order)}</span>
                         <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-green-200 text-green-900 rounded-full text-xs font-semibold">
                           served
                         </span>

@@ -33,6 +33,14 @@ const PendingOrdersSidebar: React.FC<PendingOrdersSidebarProps> = ({
   onDeleteOrder,
   onRemoveItem,
 }) => {
+  // Function to display order number with syncing status
+  const displayOrderNumber = (order: Order) => {
+    if (order.id.startsWith('local_') && order.order_number === '0') {
+      return 'Syncing';
+    }
+    return order.order_number.toString().padStart(3, '0');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -172,7 +180,7 @@ const PendingOrdersSidebar: React.FC<PendingOrdersSidebarProps> = ({
                   <div className="flex flex-row justify-between items-center gap-2 mb-2">
                     <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                       <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-[#3E2723] flex-shrink-0" />
-                      <span className="font-bold text-sm sm:text-base md:text-lg text-[#3E2723]">#{order.order_number.toString().padStart(3, '0')}</span>
+                      <span className="font-bold text-sm sm:text-base md:text-lg text-[#3E2723]">{displayOrderNumber(order)}</span>
                       {order.order_type === 'DINE_IN' && order.table_code && (
                         <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-blue-200 text-blue-900 rounded-full text-xs font-semibold flex-shrink-0">
                           Table {order.table_code}
@@ -250,16 +258,42 @@ const PendingOrdersSidebar: React.FC<PendingOrdersSidebarProps> = ({
                       <Edit2 className="w-3 h-3" />
                       Edit
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onServeOrder(order);
-                      }}
-                      className="flex-1 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-xs"
-                    >
-                      Serve
-
-                    </button>
+                    {order.status === 'preparing' ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Add mark as ready functionality
+                          if (window.confirm('Mark this order as ready for serving?')) {
+                            // Update order status to ready
+                            fetch(`/api/orders/${order.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: 'ready', items: order.items })
+                            }).then(() => {
+                              // Refresh orders after status update
+                              window.location.reload();
+                            }).catch(err => {
+                              console.error('Failed to mark order as ready:', err);
+                              alert('Failed to mark order as ready');
+                            });
+                          }
+                        }}
+                        className="flex-1 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors text-xs"
+                        title="Mark as ready for serving"
+                      >
+                        Mark Ready
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onServeOrder(order);
+                        }}
+                        className="flex-1 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors text-xs"
+                      >
+                        Serve
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

@@ -63,6 +63,7 @@ export interface OrderItem extends MenuItem {
 
 export interface Order {
   id: string;
+  server_id?: string; // Server-side ID for synced orders
   order_number: string;
   items: OrderItem[];
   total: number;

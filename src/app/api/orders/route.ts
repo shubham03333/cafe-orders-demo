@@ -147,8 +147,163 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: CreateOrderRequest = await request.json();
-    const orderId = uuidv4(); // Generate unique order ID
+    let body: CreateOrderRequest & { local_id?: string; paymentMode?: 'cash' | 'online' };
+    try {
+      body = await request.json();
+    } catch (jsonError) {
+      console.error('Invalid JSON in request body:', jsonError);
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      );
+    }
+
+    // Check if this is a payment operation (has paymentMode)
+    if (body.paymentMode) {
+      return await handlePaymentOperation(body as { local_id: string; paymentMode: 'cash' | 'online' });
+    }
+
+    // Check if this is an UPSERT operation (has local_id)
+    if (body.local_id) {
+      return await handleUpsertOrder(body as CreateOrderRequest & { local_id: string });
+    }
+
+    // Regular order creation
+    return await handleCreateOrder(body);
+  } catch (error) {
+    console.error('Error processing order request:', error);
+    return NextResponse.json(
+      { error: 'Failed to process order request' },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleCreateOrder(body: CreateOrderRequest) {
+  const orderId = uuidv4(); // Generate unique order ID
+  const currentDate = new Date();
+  const today = currentDate.toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
+
+  // Validate order_type
+  const validOrderTypes = ['DINE_IN', 'TAKEAWAY', 'DELIVERY'];
+  if (!body.order_type || !validOrderTypes.includes(body.order_type)) {
+    return NextResponse.json(
+      { error: 'Invalid order_type. Must be DINE_IN, TAKEAWAY, or DELIVERY' },
+      { status: 400 }
+    );
+  }
+
+  // Validate table_id for DINE_IN orders
+  let tableId = null;
+  if (body.order_type === 'DINE_IN') {
+    if (!body.table_id) {
+      return NextResponse.json(
+        { error: 'table_id is required for DINE_IN orders' },
+        { status: 400 }
+      );
+    }
+
+    // Check if table exists and is active, and get the integer id
+    const tableCheck = await executeQuery(
+      'SELECT id FROM tables_master WHERE table_code = ? AND is_active = 1',
+      [body.table_id]
+    ) as any[];
+
+    if (tableCheck.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid or inactive table' },
+        { status: 400 }
+      );
+    }
+
+    // Use the integer id from the database
+    tableId = tableCheck[0].id;
+  }
+
+  // Fetch the last order number for today (cast to integer for proper numerical MAX)
+  const lastOrderQuery = 'SELECT MAX(CAST(order_number AS UNSIGNED)) AS last_order_number FROM orders WHERE DATE(order_time) = ?';
+  const lastOrderResult: any[] = await executeQuery(lastOrderQuery, [today]) as any[];
+  const lastOrderNumber = lastOrderResult[0]?.last_order_number || 0; // Default to 0 if no orders exist
+
+  // Increment the order number and pad to 3 digits
+  const newOrderNumber = (lastOrderNumber + 1).toString().padStart(3, '0');
+
+  // Set initial status to 'preparing' and payment status to 'pending'
+  await executeQuery(
+    'INSERT INTO orders (id, order_number, items, total, status, payment_status, order_type, table_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [orderId, newOrderNumber, JSON.stringify(body.items), body.total, 'preparing', 'pending', body.order_type, tableId]
+  );
+
+  return NextResponse.json({
+    id: orderId,
+    success: true,
+    order_number: newOrderNumber,
+    created: true
+  });
+}
+
+async function handleUpsertOrder(body: CreateOrderRequest & { local_id: string }) {
+  // Check if order with this local_id already exists
+  const existingOrder = await executeQuery(
+    'SELECT id, order_number, status, payment_status FROM orders WHERE id = ?',
+    [body.local_id]
+  ) as any[];
+
+  if (existingOrder.length > 0) {
+    // Order exists - update it
+    const order = existingOrder[0];
+
+    // Validate order_type
+    const validOrderTypes = ['DINE_IN', 'TAKEAWAY', 'DELIVERY'];
+    if (!body.order_type || !validOrderTypes.includes(body.order_type)) {
+      return NextResponse.json(
+        { error: 'Invalid order_type. Must be DINE_IN, TAKEAWAY, or DELIVERY' },
+        { status: 400 }
+      );
+    }
+
+    // Validate table_id for DINE_IN orders
+    let tableId = null;
+    if (body.order_type === 'DINE_IN') {
+      if (!body.table_id) {
+        return NextResponse.json(
+          { error: 'table_id is required for DINE_IN orders' },
+          { status: 400 }
+        );
+      }
+
+      // Check if table exists and is active, and get the integer id
+      const tableCheck = await executeQuery(
+        'SELECT id FROM tables_master WHERE table_code = ? AND is_active = 1',
+        [body.table_id]
+      ) as any[];
+
+      if (tableCheck.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid or inactive table' },
+          { status: 400 }
+        );
+      }
+
+      // Use the integer id from the database
+      tableId = tableCheck[0].id;
+    }
+
+    // Update the existing order
+    await executeQuery(
+      'UPDATE orders SET items = ?, total = ?, order_type = ?, table_id = ?, updated_at = NOW() WHERE id = ?',
+      [JSON.stringify(body.items), body.total, body.order_type, tableId, body.local_id]
+    );
+
+    return NextResponse.json({
+      id: body.local_id,
+      success: true,
+      order_number: order.order_number,
+      created: false,
+      updated: true
+    });
+  } else {
+    // Order doesn't exist - create it with the provided local_id
     const currentDate = new Date();
     const today = currentDate.toISOString().split('T')[0]; // Get today's date in YYYY-MM-DD format
 
@@ -196,18 +351,82 @@ export async function POST(request: NextRequest) {
     // Increment the order number and pad to 3 digits
     const newOrderNumber = (lastOrderNumber + 1).toString().padStart(3, '0');
 
-    // Set initial status to 'preparing' and payment status to 'pending'
+    // Create order with provided local_id
     await executeQuery(
-      'INSERT INTO orders (id, order_number, items, total, status, payment_status, order_type, table_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [orderId, newOrderNumber, JSON.stringify(body.items), body.total, 'preparing', 'pending', body.order_type, tableId]
+      'INSERT INTO orders (id, order_number, items, total, status, payment_status, order_type, table_id, order_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+      [body.local_id, newOrderNumber, JSON.stringify(body.items), body.total, 'preparing', 'pending', body.order_type, tableId]
     );
 
-    return NextResponse.json({ id: orderId, success: true, order_number: newOrderNumber });
-  } catch (error) {
-    console.error('Error creating order:', error);
+    return NextResponse.json({
+      id: body.local_id,
+      success: true,
+      order_number: newOrderNumber,
+      created: true
+    });
+  }
+}
+
+async function handlePaymentOperation(body: { local_id: string; paymentMode: 'cash' | 'online' }) {
+  if (!body.local_id || !body.paymentMode) {
     return NextResponse.json(
-      { error: 'Failed to create order' },
-      { status: 500 }
+      { error: 'local_id and paymentMode are required for payment operations' },
+      { status: 400 }
     );
   }
+
+  // Find the order by local_id
+  const existingOrder = await executeQuery(
+    'SELECT id, status, payment_status FROM orders WHERE id = ?',
+    [body.local_id]
+  ) as any[];
+
+  if (existingOrder.length === 0) {
+    return NextResponse.json(
+      { error: 'Order not found' },
+      { status: 404 }
+    );
+  }
+
+  const order = existingOrder[0];
+
+  // Validate order can be paid
+  if (order.status !== 'ready') {
+    return NextResponse.json(
+      { error: 'Order must be ready to process payment' },
+      { status: 400 }
+    );
+  }
+
+  if (order.payment_status === 'paid') {
+    return NextResponse.json(
+      { error: 'Order is already paid' },
+      { status: 400 }
+    );
+  }
+
+  // Update order status to served and paid
+  await executeQuery(
+    'UPDATE orders SET status = ?, payment_status = ?, payment_mode = ?, served_at = NOW(), updated_at = NOW() WHERE id = ?',
+    ['served', 'paid', body.paymentMode, body.local_id]
+  );
+
+  // Add sales ledger entry
+  const today = new Date().toISOString().split('T')[0];
+  const orderDetails = await executeQuery(
+    'SELECT total FROM orders WHERE id = ?',
+    [body.local_id]
+  ) as any[];
+
+  if (orderDetails.length > 0) {
+    await executeQuery(
+      'INSERT INTO sales_ledger (order_id, amount, payment_mode, date, type, synced) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount), payment_mode = VALUES(payment_mode)',
+      [body.local_id, orderDetails[0].total, body.paymentMode, today, 'sale', true]
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    order_id: body.local_id,
+    payment_mode: body.paymentMode
+  });
 }

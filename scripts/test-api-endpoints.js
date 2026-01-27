@@ -15,12 +15,13 @@ async function testEndpoints() {
     // Test 2: Get orders
     console.log('\n2. Testing /api/orders...');
     const ordersResponse = await axios.get(`${BASE_URL}/orders`);
-    console.log('✅ Orders API working:', ordersResponse.data.length, 'orders found');
-    
+    const orders = ordersResponse.data.orders || ordersResponse.data; // Handle both paginated and direct responses
+    console.log('✅ Orders API working:', orders.length, 'orders found');
+
     // Test 3: Check if any orders are served
-    const servedOrders = ordersResponse.data.filter(order => order.status === 'served');
+    const servedOrders = orders.filter(order => order.status === 'served');
     console.log('🍽️  Served orders:', servedOrders.length);
-    
+
     if (servedOrders.length > 0) {
       console.log('💰 Total revenue from served orders:', servedOrders.reduce((sum, order) => sum + order.total, 0));
     }

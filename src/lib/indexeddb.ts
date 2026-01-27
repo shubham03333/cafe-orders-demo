@@ -1,11 +1,22 @@
 import { LocalOrder, SyncQueueItem, LocalTable, MenuItem, Table } from '@/types';
 
+const STORES = {
+  ORDERS: 'localOrders',
+  SYNC: 'syncQueue',
+  TABLES: 'localTables',
+  MENU: 'menuData',
+  TABLE_DATA: 'tableData',
+  SALES: 'salesData'
+} as const;
+
 class IndexedDBManager {
   private db: IDBDatabase | null = null;
   private readonly dbName = 'cafe-orders-db';
-  private readonly dbVersion = 1;
+  private readonly dbVersion = 3;
 
   async init(): Promise<void> {
+    if (this.db) return; // Prevent double init during Fast Refresh
+
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
@@ -25,35 +36,35 @@ class IndexedDBManager {
         this.db = db;
 
         // Create object stores
-        if (!db.objectStoreNames.contains('localOrders')) {
-          const ordersStore = db.createObjectStore('localOrders', { keyPath: 'local_order_id' });
+        if (!db.objectStoreNames.contains(STORES.ORDERS)) {
+          const ordersStore = db.createObjectStore(STORES.ORDERS, { keyPath: 'local_order_id' });
           ordersStore.createIndex('sync_status', 'sync_status', { unique: false });
           ordersStore.createIndex('created_at', 'created_at', { unique: false });
         }
 
-        if (!db.objectStoreNames.contains('syncQueue')) {
-          const syncStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(STORES.SYNC)) {
+          const syncStore = db.createObjectStore(STORES.SYNC, { keyPath: 'id', autoIncrement: true });
           syncStore.createIndex('type', 'type', { unique: false });
           syncStore.createIndex('created_at', 'created_at', { unique: false });
         }
 
-        if (!db.objectStoreNames.contains('localTables')) {
-          const tablesStore = db.createObjectStore('localTables', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(STORES.TABLES)) {
+          const tablesStore = db.createObjectStore(STORES.TABLES, { keyPath: 'id' });
           tablesStore.createIndex('last_updated', 'last_updated', { unique: false });
         }
 
-        if (!db.objectStoreNames.contains('menuData')) {
-          const menuStore = db.createObjectStore('menuData', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(STORES.MENU)) {
+          const menuStore = db.createObjectStore(STORES.MENU, { keyPath: 'id' });
           menuStore.createIndex('last_updated', 'last_updated', { unique: false });
         }
 
-        if (!db.objectStoreNames.contains('tableData')) {
-          const tableDataStore = db.createObjectStore('tableData', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(STORES.TABLE_DATA)) {
+          const tableDataStore = db.createObjectStore(STORES.TABLE_DATA, { keyPath: 'id' });
           tableDataStore.createIndex('last_updated', 'last_updated', { unique: false });
         }
 
-        if (!db.objectStoreNames.contains('salesData')) {
-          const salesDataStore = db.createObjectStore('salesData', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(STORES.SALES)) {
+          const salesDataStore = db.createObjectStore(STORES.SALES, { keyPath: 'id' });
           salesDataStore.createIndex('last_updated', 'last_updated', { unique: false });
         }
 
@@ -62,13 +73,23 @@ class IndexedDBManager {
     });
   }
 
+  private ensureStore(storeName: string) {
+    if (!this.db) {
+      throw new Error('DB not initialized');
+    }
+    if (!this.db.objectStoreNames.contains(storeName)) {
+      throw new Error(`IndexedDB store missing: ${storeName}`);
+    }
+  }
+
   // Local Orders CRUD
   async saveLocalOrder(order: LocalOrder): Promise<void> {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localOrders'], 'readwrite');
-      const store = transaction.objectStore('localOrders');
+      const transaction = this.db!.transaction([STORES.ORDERS], 'readwrite');
+      this.ensureStore(STORES.ORDERS);
+      const store = transaction.objectStore(STORES.ORDERS);
       const request = store.put(order);
 
       request.onsuccess = () => resolve();
@@ -80,8 +101,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localOrders'], 'readonly');
-      const store = transaction.objectStore('localOrders');
+      const transaction = this.db!.transaction([STORES.ORDERS], 'readonly');
+      this.ensureStore(STORES.ORDERS);
+      const store = transaction.objectStore(STORES.ORDERS);
       const request = store.get(localOrderId);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -93,8 +115,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localOrders'], 'readonly');
-      const store = transaction.objectStore('localOrders');
+      const transaction = this.db!.transaction([STORES.ORDERS], 'readonly');
+      this.ensureStore(STORES.ORDERS);
+      const store = transaction.objectStore(STORES.ORDERS);
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result || []);
@@ -106,8 +129,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localOrders'], 'readonly');
-      const store = transaction.objectStore('localOrders');
+      const transaction = this.db!.transaction([STORES.ORDERS], 'readonly');
+      this.ensureStore(STORES.ORDERS);
+      const store = transaction.objectStore(STORES.ORDERS);
       const index = store.index('sync_status');
       const request = index.getAll('pending');
 
@@ -130,8 +154,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localOrders'], 'readwrite');
-      const store = transaction.objectStore('localOrders');
+      const transaction = this.db!.transaction([STORES.ORDERS], 'readwrite');
+      this.ensureStore(STORES.ORDERS);
+      const store = transaction.objectStore(STORES.ORDERS);
       const request = store.delete(localOrderId);
 
       request.onsuccess = () => resolve();
@@ -144,8 +169,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['syncQueue'], 'readwrite');
-      const store = transaction.objectStore('syncQueue');
+      const transaction = this.db!.transaction([STORES.SYNC], 'readwrite');
+      this.ensureStore(STORES.SYNC);
+      const store = transaction.objectStore(STORES.SYNC);
       const request = store.put(item);
 
       request.onsuccess = () => resolve();
@@ -157,8 +183,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['syncQueue'], 'readonly');
-      const store = transaction.objectStore('syncQueue');
+      const transaction = this.db!.transaction([STORES.SYNC], 'readonly');
+      this.ensureStore(STORES.SYNC);
+      const store = transaction.objectStore(STORES.SYNC);
       const index = store.index('created_at');
       const request = index.getAll();
 
@@ -176,8 +203,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['syncQueue'], 'readwrite');
-      const store = transaction.objectStore('syncQueue');
+      const transaction = this.db!.transaction([STORES.SYNC], 'readwrite');
+      this.ensureStore(STORES.SYNC);
+      const store = transaction.objectStore(STORES.SYNC);
       const request = store.delete(id);
 
       request.onsuccess = () => resolve();
@@ -189,8 +217,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['syncQueue'], 'readwrite');
-      const store = transaction.objectStore('syncQueue');
+      const transaction = this.db!.transaction([STORES.SYNC], 'readwrite');
+      this.ensureStore(STORES.SYNC);
+      const store = transaction.objectStore(STORES.SYNC);
       const getRequest = store.get(id);
 
       getRequest.onsuccess = () => {
@@ -216,8 +245,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localTables'], 'readwrite');
-      const store = transaction.objectStore('localTables');
+      const transaction = this.db!.transaction([STORES.TABLES], 'readwrite');
+      this.ensureStore(STORES.TABLES);
+      const store = transaction.objectStore(STORES.TABLES);
       const request = store.put(table);
 
       request.onsuccess = () => resolve();
@@ -229,8 +259,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localTables'], 'readonly');
-      const store = transaction.objectStore('localTables');
+      const transaction = this.db!.transaction([STORES.TABLES], 'readonly');
+      this.ensureStore(STORES.TABLES);
+      const store = transaction.objectStore(STORES.TABLES);
       const request = store.get(id);
 
       request.onsuccess = () => resolve(request.result || null);
@@ -242,8 +273,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['localTables'], 'readonly');
-      const store = transaction.objectStore('localTables');
+      const transaction = this.db!.transaction([STORES.TABLES], 'readonly');
+      this.ensureStore(STORES.TABLES);
+      const store = transaction.objectStore(STORES.TABLES);
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result || []);
@@ -298,8 +330,9 @@ class IndexedDBManager {
     };
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['tableData'], 'readwrite');
-      const store = transaction.objectStore('tableData');
+      const transaction = this.db!.transaction([STORES.TABLE_DATA], 'readwrite');
+      this.ensureStore(STORES.TABLE_DATA);
+      const store = transaction.objectStore(STORES.TABLE_DATA);
       const request = store.put(tableData);
 
       request.onsuccess = () => resolve();
@@ -311,8 +344,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['tableData'], 'readonly');
-      const store = transaction.objectStore('tableData');
+      const transaction = this.db!.transaction([STORES.TABLE_DATA], 'readonly');
+      this.ensureStore(STORES.TABLE_DATA);
+      const store = transaction.objectStore(STORES.TABLE_DATA);
       const request = store.get('tables');
 
       request.onsuccess = () => {
@@ -334,8 +368,9 @@ class IndexedDBManager {
     };
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['salesData'], 'readwrite');
-      const store = transaction.objectStore('salesData');
+      const transaction = this.db!.transaction([STORES.SALES], 'readwrite');
+      this.ensureStore(STORES.SALES);
+      const store = transaction.objectStore(STORES.SALES);
       const request = store.put(salesDataWithMeta);
 
       request.onsuccess = () => resolve();
@@ -347,8 +382,9 @@ class IndexedDBManager {
     if (!this.db) await this.init();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['salesData'], 'readonly');
-      const store = transaction.objectStore('salesData');
+      const transaction = this.db!.transaction([STORES.SALES], 'readonly');
+      this.ensureStore(STORES.SALES);
+      const store = transaction.objectStore(STORES.SALES);
       const request = store.get('sales');
 
       request.onsuccess = () => {
@@ -363,10 +399,11 @@ class IndexedDBManager {
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();
 
-    const stores = ['localOrders', 'syncQueue', 'localTables', 'menuData', 'tableData', 'salesData'];
+    const stores = Object.values(STORES);
     const promises = stores.map(storeName => {
       return new Promise<void>((resolve, reject) => {
         const transaction = this.db!.transaction([storeName], 'readwrite');
+        this.ensureStore(storeName);
         const store = transaction.objectStore(storeName);
         const request = store.clear();
 
