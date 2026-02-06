@@ -101,6 +101,14 @@ class IndexedDBManager {
     });
   }
 
+  /** Returns local orders that are not yet synced (pending, syncing, or failed). Used to merge with server orders in UI. */
+  async getUnsyncedLocalOrders(): Promise<LocalOrder[]> {
+    if (!this.db) await this.init();
+
+    const all = await this.getAllLocalOrders();
+    return all.filter((o) => o.sync_status !== 'synced');
+  }
+
   async updateLocalOrder(localOrderId: string, updates: Partial<LocalOrder>): Promise<void> {
     if (!this.db) await this.init();
 

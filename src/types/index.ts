@@ -89,6 +89,7 @@ export interface UpdateOrderRequest {
   total?: number;
   status?: Order['status'];
   payment_status?: Order['payment_status'];
+  payment_mode?: 'cash' | 'online';
 }
 
 // Offline-first types

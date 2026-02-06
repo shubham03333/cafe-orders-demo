@@ -34,6 +34,11 @@ export async function PUT(
       values.push(body.payment_status);
     }
 
+    if (body.payment_mode) {
+      updateFields.push('payment_mode = ?');
+      values.push(body.payment_mode);
+    }
+
     if (updateFields.length === 0) {
       return NextResponse.json(
         { error: 'No fields to update' },

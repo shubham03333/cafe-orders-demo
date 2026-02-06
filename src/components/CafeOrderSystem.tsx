@@ -10,6 +10,21 @@ import { SyncManager } from '@/lib/syncManager';
 import GoogleReviewQR from './GoogleReviewQR';
 import PendingOrdersSidebar from './PendingOrdersSidebar';
 
+/** Convert a LocalOrder to the Order shape used by the UI (id = local_order_id for local orders). */
+function localOrderToOrder(local: LocalOrder): Order {
+  return {
+    id: local.local_order_id,
+    order_number: local.order_number ?? '—',
+    items: local.items,
+    total: local.total,
+    status: local.status,
+    payment_status: local.payment_status,
+    payment_mode: local.payment_mode,
+    order_time: local.order_time,
+    order_type: local.order_type,
+    table_code: local.table_code
+  };
+}
 
 const CafeOrderSystem = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -162,7 +177,13 @@ const CafeOrderSystem = () => {
       fetchOrders();
     };
 
+    const handleSyncComplete = () => {
+      console.log('Sync complete, refreshing orders and daily sales...');
+      fetchOrders();
+    };
+
     window.addEventListener('orderUpdated', handleOrderUpdate);
+    window.addEventListener('syncComplete', handleSyncComplete);
 
     // Memory monitoring in development
     let memoryCheckInterval: NodeJS.Timeout | null = null;
@@ -186,8 +207,14 @@ const CafeOrderSystem = () => {
         clearInterval(memoryCheckInterval);
       }
       window.removeEventListener('orderUpdated', handleOrderUpdate);
+      window.removeEventListener('syncComplete', handleSyncComplete);
     };
   }, []);
+
+  // When going offline, immediately show local orders; when coming online, sync will run and syncComplete will refresh
+  useEffect(() => {
+    fetchOrders();
+  }, [isOffline]);
 
   const fetchMenu = async () => {
     try {
@@ -202,6 +229,7 @@ const CafeOrderSystem = () => {
   };
 
   const fetchDailySales = async () => {
+    if (isOffline) return; // Keep previous sales when offline; will refresh on syncComplete when back online
     try {
       const response = await fetch('/api/daily-sales/today');
       if (!response.ok) throw new Error('Failed to fetch daily sales');
@@ -211,7 +239,7 @@ const CafeOrderSystem = () => {
     } catch (err) {
       console.error('Failed to fetch daily sales:', err);
       setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
-      setDailySales(0); // Reset to 0 on error
+      setDailySales(0);
     }
   };
 
@@ -247,31 +275,41 @@ const CafeOrderSystem = () => {
   const ordersContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchOrders = async () => {
-    const scrollPosition = ordersContainerRef.current?.scrollTop || 0; // Store current scroll position
+    const scrollPosition = ordersContainerRef.current?.scrollTop || 0;
     try {
-    const response = await fetch('/api/orders'); // Remove ?includeServed=true to only get non-served orders
-    if (!response.ok) throw new Error('Failed to fetch orders');
-    const data = await response.json();
-    // Handle paginated response structure
-    const ordersArray = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : []; // Ensure it's always an array
-    setOrders(ordersArray);
+      if (isOffline) {
+        const localOrders = await indexedDBManager.getUnsyncedLocalOrders();
+        const ordersArray = localOrders.map(localOrderToOrder);
+        setOrders(ordersArray);
+        setPendingOrdersCount(ordersArray.filter((o: Order) => o.status !== 'served').length);
+        setError(null);
+        setLoading(false);
+        if (ordersContainerRef.current) ordersContainerRef.current.scrollTop = scrollPosition;
+        return;
+      }
 
-    // Calculate pending orders count (orders that are not served)
-    const pendingOrders = ordersArray.filter((order: Order) => order.status !== 'served');
-    setPendingOrdersCount(pendingOrders.length);
+      const response = await fetch('/api/orders');
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const data = await response.json();
+      const serverOrders: Order[] = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : [];
+      const localUnsynced = await indexedDBManager.getUnsyncedLocalOrders();
+      const merged = [...serverOrders, ...localUnsynced.map(localOrderToOrder)];
+      setOrders(merged);
 
-    // Fetch daily sales from API instead of calculating locally
-    await fetchDailySales();
+      const pendingOrders = merged.filter((order: Order) => order.status !== 'served');
+      setPendingOrdersCount(pendingOrders.length);
 
-    setLoading(false);
-
-    if (ordersContainerRef.current) {
-        ordersContainerRef.current.scrollTop = scrollPosition; // Restore scroll position
-    }
-    } catch (err) {
-      setError('Failed to load orders');
+      await fetchDailySales();
+      setError(null);
       setLoading(false);
-      console.error(err);
+
+      if (ordersContainerRef.current) ordersContainerRef.current.scrollTop = scrollPosition;
+    } catch (err) {
+      if (!isOffline) {
+        setError('Failed to load orders');
+        console.error(err);
+      }
+      setLoading(false);
     }
   };
 
@@ -404,8 +442,34 @@ const CafeOrderSystem = () => {
   };
 
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
+    const order = orders.find((o) => o.id === orderId);
+    const isLocalOrder = orderId.startsWith('local_');
+
+    if (isLocalOrder) {
+      try {
+        const localOrder = await indexedDBManager.getLocalOrder(orderId);
+        if (!localOrder) return;
+        await indexedDBManager.updateLocalOrder(orderId, { status, updated_at: new Date().toISOString() });
+        syncManagerRef.current?.addOrderUpdateToSyncQueue(orderId, localOrder.server_order_id, {
+          status,
+          items: localOrder.items
+        });
+        if (status === 'served') {
+          setOrders((prev) => prev.filter((o) => o.id !== orderId));
+          setPendingOrdersCount((prev) => prev - 1);
+          if (!isOffline) await fetchDailySales();
+        } else {
+          setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
+        }
+      } catch (err) {
+        setError('Failed to update order');
+        console.error(err);
+      }
+      return;
+    }
+
     try {
-      const updateData: UpdateOrderRequest = { status, items: orders.find(order => order.id === orderId)?.items };
+      const updateData: UpdateOrderRequest = { status, items: order?.items };
 
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
@@ -415,21 +479,14 @@ const CafeOrderSystem = () => {
 
       if (!response.ok) throw new Error('Failed to update order');
 
-      // For served orders, immediately update local state for instant UI feedback
-      // and also force a refresh to ensure consistency with the backend
       if (status === 'served') {
-        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
-        setPendingOrdersCount(prev => prev - 1);
+        setOrders((prevOrders) => prevOrders.filter((o) => o.id !== orderId));
+        setPendingOrdersCount((prev) => prev - 1);
         await fetchDailySales();
-        
-        // Force an immediate refresh to ensure UI is in sync with backend
-        setTimeout(() => {
-          fetchOrders();
-        }, 100);
+        setTimeout(() => fetchOrders(), 100);
       } else {
-        await fetchOrders(); // Refresh orders for other status changes
+        await fetchOrders();
       }
-      
     } catch (err) {
       setError('Failed to update order');
       console.error(err);
@@ -437,6 +494,33 @@ const CafeOrderSystem = () => {
   };
 
   const deleteOrder = async (orderId: string) => {
+    if (orderId.startsWith('local_')) {
+      try {
+        const localOrder = await indexedDBManager.getLocalOrder(orderId);
+        if (!localOrder) {
+          setOrders((prev) => prev.filter((o) => o.id !== orderId));
+          return;
+        }
+        if (localOrder.server_order_id) {
+          await syncManagerRef.current?.addOrderDeleteToSyncQueue(orderId, localOrder.server_order_id);
+        } else {
+          const queue = await indexedDBManager.getSyncQueue();
+          for (const item of queue) {
+            if (item.local_order_id === orderId && item.type === 'order_create') {
+              await indexedDBManager.removeFromSyncQueue(item.id);
+            }
+          }
+        }
+        await indexedDBManager.deleteLocalOrder(orderId);
+        setOrders((prev) => prev.filter((o) => o.id !== orderId));
+        setPendingOrdersCount((prev) => Math.max(0, prev - 1));
+      } catch (err) {
+        setError('Failed to delete order');
+        console.error(err);
+      }
+      return;
+    }
+
     try {
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'DELETE'
@@ -444,8 +528,7 @@ const CafeOrderSystem = () => {
 
       if (!response.ok) throw new Error('Failed to delete order');
 
-      await fetchOrders(); // Refresh orders
-      
+      await fetchOrders();
     } catch (err) {
       setError('Failed to delete order');
       console.error(err);
@@ -456,6 +539,31 @@ const CafeOrderSystem = () => {
     if (!editingOrder || editingOrder.items.length === 0) {
       if (editingOrder) await deleteOrder(editingOrder.id);
       setEditingOrder(null);
+      return;
+    }
+
+    const isLocalOrder = editingOrder.id.startsWith('local_');
+
+    if (isLocalOrder) {
+      try {
+        const localOrder = await indexedDBManager.getLocalOrder(editingOrder.id);
+        if (!localOrder) return;
+        await indexedDBManager.updateLocalOrder(editingOrder.id, {
+          items: editingOrder.items,
+          total: editingOrder.total,
+          updated_at: new Date().toISOString()
+        });
+        syncManagerRef.current?.addOrderUpdateToSyncQueue(editingOrder.id, localOrder.server_order_id, {
+          items: editingOrder.items,
+          total: editingOrder.total
+        });
+        setViewingOrder(editingOrder);
+        setEditingOrder(null);
+        setOrders((prev) => prev.map((o) => (o.id === editingOrder.id ? { ...o, items: editingOrder.items, total: editingOrder.total } : o)));
+      } catch (err) {
+        setError('Failed to save order');
+        console.error(err);
+      }
       return;
     }
 
@@ -473,11 +581,9 @@ const CafeOrderSystem = () => {
 
       if (!response.ok) throw new Error('Failed to save order');
 
-      // Update the bill view with the latest changes if it's currently open
       setViewingOrder(editingOrder);
       setEditingOrder(null);
-      await fetchOrders(); // Refresh orders
-
+      await fetchOrders();
     } catch (err) {
       setError('Failed to save order');
       console.error(err);
@@ -501,28 +607,45 @@ const CafeOrderSystem = () => {
   };
 
   const removeItemFromOrder = async (orderId: string, itemId: number) => {
+    const orderToUpdate = orders.find((o) => o.id === orderId);
+    if (!orderToUpdate) return;
+
+    const updatedItems = orderToUpdate.items.filter((item) => item.id !== itemId);
+    const total = updatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    if (orderId.startsWith('local_')) {
+      try {
+        const localOrder = await indexedDBManager.getLocalOrder(orderId);
+        if (!localOrder) return;
+        await indexedDBManager.updateLocalOrder(orderId, {
+          items: updatedItems,
+          total,
+          updated_at: new Date().toISOString()
+        });
+        syncManagerRef.current?.addOrderUpdateToSyncQueue(orderId, localOrder.server_order_id, {
+          items: updatedItems,
+          total
+        });
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, items: updatedItems, total } : o)));
+        if (editingOrder?.id === orderId) setEditingOrder((e) => (e ? { ...e, items: updatedItems, total } : null));
+        if (viewingOrder?.id === orderId) setViewingOrder((v) => (v ? { ...v, items: updatedItems, total } : null));
+      } catch (err) {
+        setError('Failed to remove item from order');
+        console.error(err);
+      }
+      return;
+    }
+
     try {
-      const orderToUpdate = orders.find(order => order.id === orderId);
-      if (!orderToUpdate) return;
-
-      const updatedItems = orderToUpdate.items.filter(item => item.id !== itemId);
-      const total = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-      const updateData: UpdateOrderRequest = {
-        items: updatedItems,
-        total
-      };
-
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({ items: updatedItems, total })
       });
 
       if (!response.ok) throw new Error('Failed to remove item from order');
 
-      await fetchOrders(); // Refresh orders
-      
+      await fetchOrders();
     } catch (err) {
       setError('Failed to remove item from order');
       console.error(err);
@@ -787,8 +910,38 @@ const CafeOrderSystem = () => {
   const handlePaymentModeSelection = async (paymentMode: 'cash' | 'online') => {
     if (!orderToServe) return;
 
+    const isLocalOrder = orderToServe.id.startsWith('local_');
+
+    if (isLocalOrder) {
+      try {
+        const localOrder = await indexedDBManager.getLocalOrder(orderToServe.id);
+        if (!localOrder) return;
+        await indexedDBManager.updateLocalOrder(orderToServe.id, {
+          status: 'served',
+          payment_status: 'paid',
+          payment_mode: paymentMode,
+          updated_at: new Date().toISOString()
+        });
+        syncManagerRef.current?.addOrderUpdateToSyncQueue(orderToServe.id, localOrder.server_order_id, {
+          status: 'served',
+          payment_status: 'paid',
+          payment_mode: paymentMode,
+          items: localOrder.items
+        });
+        setOrders((prev) => prev.filter((o) => o.id !== orderToServe.id));
+        setPendingOrdersCount((prev) => Math.max(0, prev - 1));
+        if (!isOffline) await fetchDailySales();
+        closePaymentModeModal();
+        closeOrderPopup();
+      } catch (err) {
+        setError('Failed to process payment and serve order');
+        console.error(err);
+        closePaymentModeModal();
+      }
+      return;
+    }
+
     try {
-      // First update the payment mode
       const paymentResponse = await fetch(`/api/orders/${orderToServe.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -797,11 +950,10 @@ const CafeOrderSystem = () => {
 
       if (!paymentResponse.ok) throw new Error('Failed to process payment');
 
-      // Then mark the order as served
       await updateOrderStatus(orderToServe.id, 'served');
 
       closePaymentModeModal();
-      closeOrderPopup(); // Close the bill popup and return to main dashboard
+      closeOrderPopup();
     } catch (err) {
       setError('Failed to process payment and serve order');
       console.error(err);

@@ -40,6 +40,10 @@ class SyncManager {
 
     try {
       await this.processSyncQueue();
+      // Notify UI so it can refresh orders and daily sales
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('syncComplete'));
+      }
     } catch (error) {
       console.error('Sync failed:', error);
     } finally {
@@ -48,20 +52,22 @@ class SyncManager {
   }
 
   private async processSyncQueue(): Promise<void> {
-    const syncItems = await indexedDBManager.getSyncQueue();
-
-    for (const item of syncItems) {
-      try {
-        await this.processSyncItem(item);
-      } catch (error) {
-        console.error(`Failed to sync item ${item.id}:`, error);
-        // Update retry count and last attempt
-        await indexedDBManager.updateSyncQueueItem(item.id, {
-          retry_count: item.retry_count + 1,
-          last_attempt: new Date().toISOString(),
-          error_message: error instanceof Error ? error.message : 'Unknown error'
-        });
+    // Process until queue is empty (new items may be added e.g. order_update after order_create)
+    let syncItems = await indexedDBManager.getSyncQueue();
+    while (syncItems.length > 0) {
+      for (const item of syncItems) {
+        try {
+          await this.processSyncItem(item);
+        } catch (error) {
+          console.error(`Failed to sync item ${item.id}:`, error);
+          await indexedDBManager.updateSyncQueueItem(item.id, {
+            retry_count: item.retry_count + 1,
+            last_attempt: new Date().toISOString(),
+            error_message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
       }
+      syncItems = await indexedDBManager.getSyncQueue();
     }
   }
 
@@ -77,19 +83,40 @@ class SyncManager {
         });
         break;
 
-      case 'order_update':
-        response = await fetch(`/api/orders/${item.data.server_order_id}`, {
+      case 'order_update': {
+        let serverOrderId = item.data.server_order_id;
+        if (!serverOrderId) {
+          const localOrder = await indexedDBManager.getLocalOrder(item.local_order_id);
+          serverOrderId = localOrder?.server_order_id;
+        }
+        if (!serverOrderId) {
+          throw new Error('Cannot sync order_update: server_order_id not yet available (order may need to sync first)');
+        }
+        response = await fetch(`/api/orders/${serverOrderId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(item.data.updates)
         });
         break;
+      }
 
-      case 'order_delete':
-        response = await fetch(`/api/orders/${item.data.server_order_id}`, {
+      case 'order_delete': {
+        let serverOrderId = item.data.server_order_id;
+        if (!serverOrderId) {
+          const localOrder = await indexedDBManager.getLocalOrder(item.local_order_id);
+          serverOrderId = localOrder?.server_order_id;
+        }
+        if (!serverOrderId) {
+          // Order was never synced; just remove from queue and delete local
+          await indexedDBManager.removeFromSyncQueue(item.id);
+          await indexedDBManager.deleteLocalOrder(item.local_order_id);
+          return;
+        }
+        response = await fetch(`/api/orders/${serverOrderId}`, {
           method: 'DELETE'
         });
         break;
+      }
 
       default:
         throw new Error(`Unknown sync type: ${item.type}`);
@@ -102,7 +129,7 @@ class SyncManager {
 
     const result = await response.json();
 
-    // Update local order with server data
+    // Update local order with server data (or remove for delete)
     if (item.type === 'order_create' && result.id) {
       await indexedDBManager.updateLocalOrder(item.local_order_id, {
         server_order_id: result.id,
@@ -110,6 +137,17 @@ class SyncManager {
         sync_status: 'synced',
         updated_at: new Date().toISOString()
       });
+      // If this order was already marked served locally, queue an update so server gets status and daily_sales updates
+      const localOrder = await indexedDBManager.getLocalOrder(item.local_order_id);
+      if (localOrder?.status === 'served') {
+        await this.addOrderUpdateToSyncQueue(item.local_order_id, result.id, {
+          status: 'served',
+          payment_status: localOrder.payment_status || 'pending',
+          items: localOrder.items
+        });
+      }
+    } else if (item.type === 'order_delete') {
+      await indexedDBManager.deleteLocalOrder(item.local_order_id);
     } else {
       await indexedDBManager.updateLocalOrder(item.local_order_id, {
         sync_status: 'synced',
@@ -146,7 +184,7 @@ class SyncManager {
     }
   }
 
-  async addOrderUpdateToSyncQueue(localOrderId: string, serverOrderId: string, updates: any): Promise<void> {
+  async addOrderUpdateToSyncQueue(localOrderId: string, serverOrderId: string | undefined, updates: any): Promise<void> {
     const syncItem: SyncQueueItem = {
       id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'order_update',
@@ -167,7 +205,7 @@ class SyncManager {
     }
   }
 
-  async addOrderDeleteToSyncQueue(localOrderId: string, serverOrderId: string): Promise<void> {
+  async addOrderDeleteToSyncQueue(localOrderId: string, serverOrderId: string | undefined): Promise<void> {
     const syncItem: SyncQueueItem = {
       id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'order_delete',
