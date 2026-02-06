@@ -48,20 +48,22 @@ export async function PUT(
 
     values.push(id);
 
-    // Idempotency: read current status before update so we only add to daily_sales once per order
-    const existingRows = await executeQuery(
-      'SELECT status, total FROM orders WHERE id = ?',
-      [id]
-    ) as any[];
-    const previousStatus = existingRows?.[0]?.status;
-    const wasAlreadyServed = previousStatus === 'served';
+    // Idempotency: only one request can transition an order to 'served' (atomic UPDATE)
+    let transitionedToServed = false;
+    if (body.status === 'served') {
+      const updateResult = await executeQuery(
+        `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ? AND status != 'served'`,
+        values
+      ) as any;
+      transitionedToServed = (updateResult?.affectedRows ?? 0) >= 1;
+    } else {
+      await executeQuery(
+        `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
 
-    await executeQuery(
-      `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
-      values
-    );
-
-    if (body.status === 'served' && !wasAlreadyServed) {
+    if (body.status === 'served' && transitionedToServed) {
       console.log(`Updating order status for order ID: ${id} to served (first time)`);
       const afterRows = await executeQuery('SELECT total FROM orders WHERE id = ?', [id]) as any[];
       const orderTotal = afterRows?.[0]?.total;
@@ -79,7 +81,7 @@ export async function PUT(
     }
 
     // Reduce stock quantity only when transitioning to served (idempotent)
-    if (body.status === 'served' && !wasAlreadyServed && body.items) {
+    if (body.status === 'served' && transitionedToServed && body.items) {
       console.log(`Reducing stock for order ID: ${id}`);
       
       const stockAdjustments = body.items.map(item => ({

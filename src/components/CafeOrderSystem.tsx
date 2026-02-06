@@ -44,9 +44,6 @@ const CafeOrderSystem = () => {
   // Shown when API returns 5xx (e.g. TiDB unavailable) and we fall back to local orders
   const [serverUnavailable, setServerUnavailable] = useState(false);
 
-  // Revenue from local orders marked "served" while offline; added to daily sales display until synced
-  const [localServedRevenue, setLocalServedRevenue] = useState(0);
-
   // SyncManager instance
   const syncManagerRef = useRef<SyncManager | null>(null);
   
@@ -185,7 +182,6 @@ const CafeOrderSystem = () => {
 
     const handleSyncComplete = () => {
       console.log('Sync complete, refreshing orders and daily sales...');
-      setLocalServedRevenue(0); // Server now has the correct totals
       fetchOrders();
     };
 
@@ -240,7 +236,6 @@ const CafeOrderSystem = () => {
       const data = await response.json();
       setSalesData(data);
       setDailySales(data.total_revenue);
-      setLocalServedRevenue(0); // Server is source of truth
     } catch (err) {
       console.error('Failed to fetch daily sales:', err);
       setSalesData({ total_revenue: 0, payment_breakdown: { cash: { orders: 0, revenue: 0 }, online: { orders: 0, revenue: 0 } } });
@@ -485,9 +480,8 @@ const CafeOrderSystem = () => {
           items: localOrder.items
         });
         if (status === 'served') {
-          setLocalServedRevenue((prev) => prev + (order?.total ?? 0));
-          setOrders((prev) => prev.filter((o) => o.id !== orderId));
-          setPendingOrdersCount((prev) => prev - 1);
+          setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'served' } : o)));
+          setPendingOrdersCount((prev) => Math.max(0, prev - 1));
           if (!isOffline) await fetchDailySales();
         } else {
           setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
@@ -959,8 +953,7 @@ const CafeOrderSystem = () => {
           payment_mode: paymentMode,
           items: localOrder.items
         });
-        setLocalServedRevenue((prev) => prev + orderToServe.total);
-        setOrders((prev) => prev.filter((o) => o.id !== orderToServe.id));
+        setOrders((prev) => prev.map((o) => (o.id === orderToServe.id ? { ...o, status: 'served', payment_status: 'paid', payment_mode: paymentMode } : o)));
         setPendingOrdersCount((prev) => Math.max(0, prev - 1));
         if (!isOffline) await fetchDailySales();
         closePaymentModeModal();
@@ -1146,7 +1139,7 @@ const CafeOrderSystem = () => {
             </div>
             <div className="bg-white/20 backdrop-blur-sm rounded-lg p-1.5 sm:p-2.5 min-w-[50px] sm:min-w-[64px] cursor-pointer min-h-[40px] sm:min-h-[44px] flex flex-col items-center justify-center flex-shrink-0" onClick={openPaymentRevenueModal}>
               <div className="text-[10px] sm:text-xs text-white/90">Sales</div>
-              <div className="text-sm sm:text-lg font-bold text-white">₹{dailySales + ((isOffline || serverUnavailable) ? localServedRevenue : 0)}</div>
+              <div className="text-sm sm:text-lg font-bold text-white">₹{dailySales + ((isOffline || serverUnavailable) ? orders.filter((o) => o.id.startsWith('local_') && o.status === 'served').reduce((s, o) => s + o.total, 0) : 0)}</div>
             </div>
             <button
               onClick={openServedOrdersModal}
@@ -1963,9 +1956,9 @@ const CafeOrderSystem = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs text-green-700 font-medium">Total Revenue</div>
-                    <div className="text-xl font-bold text-green-900">₹{salesData.total_revenue + ((isOffline || serverUnavailable) ? localServedRevenue : 0)}</div>
-                    {(isOffline || serverUnavailable) && localServedRevenue > 0 && (
-                      <div className="text-xs text-green-600 mt-0.5">Includes ₹{localServedRevenue} from orders pending sync</div>
+                    <div className="text-xl font-bold text-green-900">₹{salesData.total_revenue + ((isOffline || serverUnavailable) ? orders.filter((o) => o.id.startsWith('local_') && o.status === 'served').reduce((s, o) => s + o.total, 0) : 0)}</div>
+                    {(isOffline || serverUnavailable) && orders.some((o) => o.id.startsWith('local_') && o.status === 'served') && (
+                      <div className="text-xs text-green-600 mt-0.5">Includes ₹{orders.filter((o) => o.id.startsWith('local_') && o.status === 'served').reduce((s, o) => s + o.total, 0)} from orders pending sync</div>
                     )}
                   </div>
                   <div className="text-2xl">💰</div>

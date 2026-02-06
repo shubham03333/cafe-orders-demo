@@ -178,6 +178,10 @@ class SyncManager {
   }
 
   async addOrderUpdateToSyncQueue(localOrderId: string, serverOrderId: string | undefined, updates: any): Promise<void> {
+    // Avoid duplicate "mark as served" syncs: only one order_update per local order for served
+    if (updates?.status === 'served') {
+      await indexedDBManager.removeSyncQueueItemsByLocalOrderIdAndType(localOrderId, 'order_update');
+    }
     const syncItem: SyncQueueItem = {
       id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'order_update',

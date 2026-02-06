@@ -178,6 +178,15 @@ class IndexedDBManager {
     });
   }
 
+  /** Remove all sync queue items for a given local_order_id and type (e.g. avoid duplicate "served" updates). */
+  async removeSyncQueueItemsByLocalOrderIdAndType(localOrderId: string, type: SyncQueueItem['type']): Promise<void> {
+    const items = await this.getSyncQueue();
+    const toRemove = items.filter((i) => i.local_order_id === localOrderId && i.type === type);
+    for (const item of toRemove) {
+      await this.removeFromSyncQueue(item.id);
+    }
+  }
+
   async updateSyncQueueItem(id: string, updates: Partial<SyncQueueItem>): Promise<void> {
     if (!this.db) await this.init();
 
