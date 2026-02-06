@@ -41,6 +41,9 @@ const CafeOrderSystem = () => {
   // Offline status
   const isOffline = useOfflineStatus();
 
+  // Shown when API returns 5xx (e.g. TiDB unavailable) and we fall back to local orders
+  const [serverUnavailable, setServerUnavailable] = useState(false);
+
   // SyncManager instance
   const syncManagerRef = useRef<SyncManager | null>(null);
   
@@ -280,13 +283,29 @@ const CafeOrderSystem = () => {
         setOrders(ordersArray);
         setPendingOrdersCount(ordersArray.filter((o: Order) => o.status !== 'served').length);
         setError(null);
+        setServerUnavailable(false);
         setLoading(false);
         if (ordersContainerRef.current) ordersContainerRef.current.scrollTop = scrollPosition;
         return;
       }
 
       const response = await fetch('/api/orders');
-      if (!response.ok) throw new Error('Failed to fetch orders');
+      if (!response.ok) {
+        if (response.status >= 500) {
+          const localOrders = await indexedDBManager.getUnsyncedLocalOrders();
+          const ordersArray = localOrders.map(localOrderToOrder);
+          setOrders(ordersArray);
+          setPendingOrdersCount(ordersArray.filter((o: Order) => o.status !== 'served').length);
+          setServerUnavailable(true);
+          setError(null);
+          setLoading(false);
+          if (ordersContainerRef.current) ordersContainerRef.current.scrollTop = scrollPosition;
+          return;
+        }
+        throw new Error('Failed to fetch orders');
+      }
+
+      setServerUnavailable(false);
       const data = await response.json();
       const serverOrders: Order[] = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : [];
       const localUnsynced = await indexedDBManager.getUnsyncedLocalOrders();
@@ -303,7 +322,16 @@ const CafeOrderSystem = () => {
       if (ordersContainerRef.current) ordersContainerRef.current.scrollTop = scrollPosition;
     } catch (err) {
       if (!isOffline) {
-        setError('Failed to load orders');
+        try {
+          const localOrders = await indexedDBManager.getUnsyncedLocalOrders();
+          const ordersArray = localOrders.map(localOrderToOrder);
+          setOrders(ordersArray);
+          setPendingOrdersCount(ordersArray.filter((o: Order) => o.status !== 'served').length);
+          setServerUnavailable(true);
+          setError(null);
+        } catch {
+          setError('Failed to load orders');
+        }
         console.error(err);
       }
       setLoading(false);
@@ -1061,6 +1089,12 @@ const CafeOrderSystem = () => {
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
     >
+      {serverUnavailable && (
+        <div className="mb-2 rounded-lg bg-amber-100 border border-amber-400 text-amber-900 px-3 py-2 text-sm flex items-center gap-2">
+          <WifiOff className="w-4 h-4 flex-shrink-0" />
+          <span>Database temporarily unavailable. Showing locally saved orders. New orders will sync when the connection is restored.</span>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-gradient-to-r from-[#6B4423] to-[#8B6239] rounded-lg shadow-lg p-2 sm:p-3 md:p-4 mb-2 sm:mb-3 md:mb-4 transition-all duration-300">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-3 md:gap-4">
