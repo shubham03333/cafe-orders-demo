@@ -152,24 +152,24 @@ const CafeOrderSystem = () => {
     setViewingOrder(order);
   };
 
-  // Fetch menu items and set up real-time updates with optimized polling
+  // Fetch menu items and set up real-time updates with optimized polling (only when online)
   useEffect(() => {
-    // Instantiate SyncManager
     syncManagerRef.current = new SyncManager();
 
-    fetchMenu();
-    fetchOrders();
-    fetchTables();
-    fetchPopularItems();
+    fetchOrders(); // Always run: loads from API when online, from IndexedDB when offline
+    if (!isOffline) {
+      fetchMenu();
+      fetchTables();
+      fetchPopularItems();
+    }
 
-    // Set up polling for real-time updates with longer intervals to reduce memory usage
-    const ordersPollingInterval = setInterval(() => {
-      fetchOrders();
-    }, 5000); // Poll orders every 5 seconds (increased from 3)
-
-    const menuPollingInterval = setInterval(() => {
-      fetchMenu(); // Refresh menu items to reflect availability changes from admin
-    }, 30000); // Poll menu every 30 seconds (reduced frequency)
+    // Poll API only when online; when offline the interval would use stale closure and hit the API
+    let ordersPollingInterval: ReturnType<typeof setInterval> | null = null;
+    let menuPollingInterval: ReturnType<typeof setInterval> | null = null;
+    if (!isOffline) {
+      ordersPollingInterval = setInterval(() => fetchOrders(), 5000);
+      menuPollingInterval = setInterval(() => fetchMenu(), 30000);
+    }
 
     // Listen for order update events (e.g., payment status changes)
     const handleOrderUpdate = () => {
@@ -185,31 +185,27 @@ const CafeOrderSystem = () => {
     window.addEventListener('orderUpdated', handleOrderUpdate);
     window.addEventListener('syncComplete', handleSyncComplete);
 
-    // Memory monitoring in development
     let memoryCheckInterval: NodeJS.Timeout | null = null;
     if (process.env.NODE_ENV === 'development') {
       memoryCheckInterval = setInterval(() => {
         if (typeof window !== 'undefined' && (window as any).performance?.memory) {
           const memInfo = (window as any).performance.memory;
           const usedMB = Math.round(memInfo.usedJSHeapSize / 1024 / 1024);
-          if (usedMB > 100) { // Log when browser memory exceeds 100MB
+          if (usedMB > 100) {
             console.warn(`⚠️ High browser memory usage: ${usedMB}MB`);
           }
         }
-      }, 60000); // Check every minute
+      }, 60000);
     }
 
-    // Clean up intervals and event listener on component unmount
     return () => {
-      clearInterval(ordersPollingInterval);
-      clearInterval(menuPollingInterval);
-      if (memoryCheckInterval) {
-        clearInterval(memoryCheckInterval);
-      }
+      if (ordersPollingInterval) clearInterval(ordersPollingInterval);
+      if (menuPollingInterval) clearInterval(menuPollingInterval);
+      if (memoryCheckInterval) clearInterval(memoryCheckInterval);
       window.removeEventListener('orderUpdated', handleOrderUpdate);
       window.removeEventListener('syncComplete', handleSyncComplete);
     };
-  }, []);
+  }, [isOffline]);
 
   // When going offline, immediately show local orders; when coming online, sync will run and syncComplete will refresh
   useEffect(() => {
@@ -217,6 +213,7 @@ const CafeOrderSystem = () => {
   }, [isOffline]);
 
   const fetchMenu = async () => {
+    if (isOffline) return; // Skip API when offline to avoid net::ERR_INTERNET_DISCONNECTED
     try {
       const response = await fetch('/api/menu?availableOnly=true');
       if (!response.ok) throw new Error('Failed to fetch menu');
