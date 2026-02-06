@@ -137,15 +137,8 @@ class SyncManager {
         sync_status: 'synced',
         updated_at: new Date().toISOString()
       });
-      // If this order was already marked served locally, queue an update so server gets status and daily_sales updates
-      const localOrder = await indexedDBManager.getLocalOrder(item.local_order_id);
-      if (localOrder?.status === 'served') {
-        await this.addOrderUpdateToSyncQueue(item.local_order_id, result.id, {
-          status: 'served',
-          payment_status: localOrder.payment_status || 'pending',
-          items: localOrder.items
-        });
-      }
+      // Do NOT queue order_update here when local order is 'served' - the user already queued it
+      // when they clicked "Mark as served". Adding it again would cause daily_sales to be applied twice (idempotency bug).
     } else if (item.type === 'order_delete') {
       await indexedDBManager.deleteLocalOrder(item.local_order_id);
     } else {

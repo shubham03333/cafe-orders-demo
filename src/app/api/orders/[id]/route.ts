@@ -48,24 +48,25 @@ export async function PUT(
 
     values.push(id);
 
+    // Idempotency: read current status before update so we only add to daily_sales once per order
+    const existingRows = await executeQuery(
+      'SELECT status, total FROM orders WHERE id = ?',
+      [id]
+    ) as any[];
+    const previousStatus = existingRows?.[0]?.status;
+    const wasAlreadyServed = previousStatus === 'served';
+
     await executeQuery(
       `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
       values
     );
 
-    if (body.status === 'served') {
-      console.log(`Updating order status for order ID: ${id} to served`);
-      // Get the order total first
-      const orderRows = await executeQuery(
-        'SELECT total FROM orders WHERE id = ?',
-        [id]
-      ) as any[];
-      
-      if (orderRows && orderRows.length > 0) {
-        const orderTotal = orderRows[0].total;
-        console.log(`Order total for order ID ${id}: ₹${orderTotal}`);
-        const today = await getTodayDateString(); // Use configured timezone date
-        
+    if (body.status === 'served' && !wasAlreadyServed) {
+      console.log(`Updating order status for order ID: ${id} to served (first time)`);
+      const afterRows = await executeQuery('SELECT total FROM orders WHERE id = ?', [id]) as any[];
+      const orderTotal = afterRows?.[0]?.total;
+      if (orderTotal != null) {
+        const today = await getTodayDateString();
         await executeQuery(`
           INSERT INTO daily_sales (sale_date, total_orders, total_revenue) 
           VALUES (?, 1, ?) 
@@ -77,8 +78,8 @@ export async function PUT(
       }
     }
 
-    // Reduce stock quantity for each item in the order when status is served
-    if (body.status === 'served' && body.items) {
+    // Reduce stock quantity only when transitioning to served (idempotent)
+    if (body.status === 'served' && !wasAlreadyServed && body.items) {
       console.log(`Reducing stock for order ID: ${id}`);
       
       const stockAdjustments = body.items.map(item => ({
