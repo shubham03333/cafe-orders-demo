@@ -348,8 +348,11 @@ const CafeOrderSystem = () => {
     });
   };
 
+  const isPlacingOrderRef = useRef(false);
   const placeOrder = async () => {
     if (buildingOrder.length === 0) return;
+    if (isPlacingOrderRef.current) return; // Prevent double submission
+    isPlacingOrderRef.current = true;
 
     try {
       const total = buildingOrder.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -463,6 +466,8 @@ const CafeOrderSystem = () => {
         console.error('Failed to save order locally:', fallbackErr);
         setError('Failed to place order and unable to save locally');
       }
+    } finally {
+      isPlacingOrderRef.current = false;
     }
   };
 

@@ -155,6 +155,8 @@ class SyncManager {
   }
 
   async addOrderToSyncQueue(localOrder: LocalOrder): Promise<void> {
+    // Only one order_create per local order: remove any existing to prevent duplicate orders when syncing
+    await indexedDBManager.removeSyncQueueItemsByLocalOrderIdAndType(localOrder.local_order_id, 'order_create');
     const syncItem: SyncQueueItem = {
       id: `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'order_create',
